@@ -26,5 +26,7 @@ for root, dirs, files in os.walk(baseDir):
 			else:
 				os.renames(fileName, targetName)
 				fileCount += 1
+	else:
+		pass
 
 print("Sorted %i files." % (fileCount,))
