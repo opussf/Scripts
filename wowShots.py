@@ -16,16 +16,17 @@ fileCount = 0
 for root, dirs, files in os.walk(baseDir):
 	if root == baseDir:  # only loop through the baseDir for files
 		for f in files:
-			fileName = os.path.join(root, f)
-			mtime = int(os.lstat(fileName).st_mtime)
-			fileDate = date.fromtimestamp(mtime).strftime(folderNameFormat)
-			targetName = os.path.join(root, fileDate, f)
+			if f[0] not in ["."]:
+				fileName = os.path.join(root, f)
+				mtime = int(os.lstat(fileName).st_mtime)
+				fileDate = date.fromtimestamp(mtime).strftime(folderNameFormat)
+				targetName = os.path.join(root, fileDate, f)
 
-			if dryrun:
-				print("I would move: %s -> %s" % (fileName, targetName))
-			else:
-				os.renames(fileName, targetName)
-				fileCount += 1
+				if dryrun:
+					print("I would move: %s -> %s" % (fileName, targetName))
+				else:
+					os.renames(fileName, targetName)
+					fileCount += 1
 	else:
 		pass
 
