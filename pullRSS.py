@@ -83,7 +83,7 @@ if __name__=="__main__":
 
 	opmlFile = "/Users/opus/Downloads/MySubscriptions.opml"
 	destPath = "/Users/opus/Downloads/Everything/"
-	cachePath = os.path.join( destPath, "cache/" )
+	cachePath = os.path.join( destPath, ".cache/" )
 
 	""" TODO:  use the cachePath to download everything, then copy it to the destPath.
 	    The Cache path will then not have files vanish, and can be used to track files downloaded.
