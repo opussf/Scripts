@@ -3,6 +3,8 @@
 # retuns 0 if changed  (normal success)
 # retuns 1 if not changed (normal failure)
 # if check file does not exist, assume the file has changed
+# usage:  checkFileChanged.sh <file> && <do this on changed file>
+
 
 fileToCheck=$1
 fileToCheckTmpName="/tmp/checkfile_"`md5 -q -s "$fileToCheck"`
@@ -25,7 +27,6 @@ fi
 if [ "$tmpMD5" != "$fileToCheckMD5" ]; then
 	# file has not changed
 	echo $fileToCheckMD5 > $fileToCheckTmpName
-	say "file has changed.  Do something."
 	exit 0
 fi
 exit 1
