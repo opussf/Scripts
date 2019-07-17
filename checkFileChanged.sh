@@ -10,23 +10,14 @@ fileToCheck=$1
 fileToCheckTmpName="/tmp/checkfile_"`md5 -q -s "$fileToCheck"`
 
 # make sure checking file exists,
-if [ -f "$fileToCheck" ]; then
-	fileToCheckMD5=`md5 -q "$fileToCheck"`
-else
+if [ ! -f "$fileToCheck" ]; then
 	echo "$fileToCheck does not exist?"
+	exit 2  # this would keep it from runing anything if you are looking for success to continue
 fi
 
-#echo $fileToCheckMD5
-# get the contents, or use ""
-if [ -f $fileToCheckTmpName ]; then
-	tmpMD5=`cat $fileToCheckTmpName`
-else
-	tmpMD5=""
-fi
-
-if [ "$tmpMD5" != "$fileToCheckMD5" ]; then
-	# file has not changed
-	echo $fileToCheckMD5 > $fileToCheckTmpName
+if [ ! -f "$fileToCheckTmpName" ] || [ "$fileToCheck" -nt "$fileToCheckTmpName" ]; then
+	# tmp file does not exist, OR file to check is newer
+	touch "$fileToCheckTmpName"
 	exit 0
 fi
 exit 1
