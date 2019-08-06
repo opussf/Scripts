@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
-import xml.sax
+import xml.etree.ElementTree as ET
+# https://docs.python.org/2/library/xml.etree.elementtree.html
 import re
 import urllib2, os
 import shutil
@@ -12,53 +13,75 @@ import math
 #import threading
 #import Queue
 
-class OPML( object ):
-	"""OPML object to parse RSS data from OPML
-	OPML is very freeform on the <outline> tag.  Only the <opml><head><body><outline> tags are required.
+class XML( object ):
+	""" XML object HAS an xml.sax.handler
+	An XML is a file object.  This could be a file, a string, or a URL.  <--- will depend on how the xml.sax.parser handles it.
 	"""
-	feedList = [] # list of Feed objects
-	class OPMLHandler( xml.sax.handler.ContentHandler ):
-		"""Sax Handler for the OPML document to extract outline data"""
-		def __init__( self ):
-			self.feedAttributes = []
-		def startElement( self, name, attributes ):
-			if name == "outline":
-				feedInfo = {}
-				for ak in attributes.keys():
-					#print( ak, attributes[ak] )
-					feedInfo[ak] = attributes[ak]
-				self.feedAttributes.append( feedInfo )
-		def characters( self, data ):
-			pass
-		def endElement( self, name ):
-			pass
+	def __init__( self ):
+		""" init the object """
+		self.tree = None
+		self.root = None
+		self.source = { "file": None, "url": None, "string": None }
+	def __clearsource( self ):
+		""" clears other sources """
+		for k in self.source.keys():
+			self.source.pop( k, None )
+		self.tree = None
+		self.root = None
+	def setFile( self, fileName ):
+		""" set a file as the source """
+		self.__clearsource()
+		self.source["file"] = fileName
+	def setURL( self, url ):
+		""" set a URL as the source """
+		self.__clearsource()
+		self.source["url"] = url
+	def setString( self, str ):
+		""" sets a string as the source """
+		self.__clearsource()
+		self.source["string"] = str
+	def parse( self ):
+		if len( self.source ) == 1:  # only
+			self.tree = None
+			self.root = None
+			if "string" in self.source:
+				try:
+					self.root = ET.fromstring( self.source["string"] )
+				except ET.ParseError as e:
+					logger.error( "%s trying to parse string." % ( e, ) )
+			if "file" in self.source:
+				try:
+					self.root = ET.parse( self.source["file"] ).getroot()
+				except (IOError, ET.ParseError) as e:
+					logger.error( "%s trying to parse file %s" % ( e, self.source["file"] ) )
+			if "url" in self.source:
+				try:
+					request = urllib2.Request( self.source["url"] )
+					result = urllib2.urlopen( request )
+					self.root = ET.fromstring( result.read() )
+				except (urllib2.URLError, ET.ParseError) as e:
+					logger.error( "%s: %s trying to read from %s" % ( e.__class__.__name__, e, self.source["url"] ) )
+				finally:
+					request = None
+					result = None
 
-	def __init__( self, opmlFile ):
-		self.opmlFile = opmlFile
-		self.parser = xml.sax.make_parser()
-		self.handler = self.OPMLHandler()
-		self.parser.setContentHandler( self.handler )
-		self.parser.parse( self.opmlFile )
-		self.parser.close()
-		self.parser.reset()
-		self.parser = None
+		else:
+			# throw an exception of some sort here....
+			logger.error( "I have no sources to parse." )
 
-		#self.feedList.append( self.handler.feedAttributes )
-
+class OPML( XML ):
+	""" OPML object to parse RSS data from OPML
+	OPML is very freeform on the <outline> tag.  Only the <opml><head><body><outline> tags are required.
+	parse all the outline attributes into a dictionary, and put the dictionaries in a list
+	"""
+	feedList = [] #list of Feed objects
 	def feeds( self ):
-		""" This returns the list of Feed objects from the OPML file.
-		If the number of feeds does not match the number of attribute dictionaries, re-generate the list
-		"""
-		if len( self.feedList ) != len( self.handler.feedAttributes ):
-			# make them here
-			for feedAttributes in self.handler.feedAttributes:
-				thisFeed = Feed.factory( feedAttributes )
-				self.feedList.append( thisFeed )
-
-		#print( self.feedList )
+		if self.root is not None:
+			for outline in self.root.iter('outline'):
+				self.feedList.append( Feed.factory( outline.attrib ) )
 		return self.feedList
 
-class Feed( object ):
+class Feed( XML ):
 	""" This is a factory class """
 	attributes = {}
 	def __init__( self, title, feedUrl ):
@@ -66,10 +89,10 @@ class Feed( object ):
 		logger.debug( "Feed.__init__( %s, %s ) " % ( title, feedUrl ) )
 		self.title = title
 		self.feedUrl = feedUrl
-
-	def getSources( self ):
-		raise NotImplementedError
-
+		super( Feed, self ).__init__()
+		self.setURL( self.feedUrl )
+	def getSource( self ):
+		self.parse()
 	def getImageURLs( self ):
 		""" return a list of list of tuples.
 		[
@@ -79,8 +102,6 @@ class Feed( object ):
 		each inner list is a possible single image
 		"""
 		raise NotImplementedError
-
-
 	@staticmethod
 	def __getSubTypes( classType ):
 		subclassObjects = [ sc for sc in classType.__subclasses__() ]
@@ -90,7 +111,6 @@ class Feed( object ):
 		subTypes = dict( zip( subclassNames, zip( matchAttributes, subclassObjects ) ) )
 
 		return subTypes
-
 	@staticmethod
 	def factory( attributes ):
 		""" determines which subclass to return
@@ -127,171 +147,95 @@ class Feed( object ):
 		else:
 			logger.error( "Unable to match to a known type." )
 
+class METARS( Feed ):
+	matchAttributes = { "version": "METARS" }
+
+
 class RSS( Feed ):
 	"""RSS object to parse attachment data from RSS feed"""
-	matchAttributes = { "type": "RSS" }
-
-	class RSSHandler( xml.sax.handler.ContentHandler ):
-		"""Sax Handler for RSS feed"""
-		def __init__( self ):
-			self.attachments = []
-			self.data = []
-			self.descriptionSrcs = []
-			self.links = []
-			self.srcPattern = re.compile('.*src=["\'](.*?)["\'].*')
-
-		def startElement( self, name, attributes ):
-			if name == "description":
-				self.data = []
-		def characters( self, data ):
-			self.data.append( data )
-		def endElement( self, name ):
-			if name == "description":
-				descText = "".join(self.data)
-				#print descText
-				m = self.srcPattern.match( descText )
-				if m:
-					self.descriptionSrcs.append( m.group(1) )
-	def getSources( self ):
-		self.parser = xml.sax.make_parser()
-		self.handler = self.RSSHandler()
-		self.parser.setContentHandler( self.handler )
-		try:
-			self.parser.parse( self.feedUrl )
-		except Exception as e:
-			logger.error( "%s trying to read from %s" % ( e, self.feedUrl ) )
-		self.parser.close()
-		self.parser.reset()
-		self.parser = None
+	matchAttributes = { "type": "rss", "version": "RSS" }
 	def getImageURLs( self ):
-		RSS.getSources( self )
+		self.getSource()
 		outSrcs = []
-		for src in self.handler.descriptionSrcs:
-			srcInfo = os.path.split( src )
-			outName = srcInfo[1]
-			outSrcs.append( [ ( outName, src ) ] )
+		for item in self.root.iter( "item" ):
+			for desc in item.iter("description"):
+				srcInfo = os.path.split( desc.text )
+				outName = srcInfo[1]
+				outSrcs.append( [ ( outName, desc.text ) ] )
 		return outSrcs
 
-class TumblrFeed( RSS ):
+class TumblrFeed( Feed ):
 	matchAttributes = { "xmlUrl": "tumblr.com" }
+	srcPattern = re.compile('.*src=["\'](.*?)["\'].*')
 	def getImageURLs( self ):
-		RSS.getSources( self )
+		self.getSource()
 		outSrcs = []
-		for src in self.handler.descriptionSrcs:
-			#print src
-			srcInfo = os.path.split( src )
-			outName = srcInfo[1]
-			largeFileName = re.sub( '500', '1280', outName )
-			#print largeFileName
-			outFileNames = []
-			outFileNames.append( ( largeFileName, os.path.join( srcInfo[0], largeFileName ) ) )
-			outFileNames.append( ( outName, os.path.join( srcInfo[0], outName ) ) )
-			#print outFileNames
-			outSrcs.append( outFileNames )
-		return outSrcs
-
-class PURL( RSS ):
-	matchAttributes = { "version": "PURL" }
-	class RNHandler( xml.sax.handler.ContentHandler ):
-		"""Sax Handler for RSS / PURL (sigh) feed"""
-		def __init__( self ):
-			self.data = []
-			self.descriptionSrcs = []
-			self.srcPattern = re.compile( '.*srcset="(.*?)".*' )
-		def startElement( self, name, attributes ):
-			if name == "content:encoded":
-				self.data = []
-
-		def characters( self, data ):
-			self.data.append( data )
-		def endElement( self, name ):
-			if name == "content:encoded":
-				contentText = "".join( self.data )
-				m = self.srcPattern.match( contentText )
+		for item in self.root.iter("item"):
+			desc = item.find("description")
+			if desc is not None:
+				m = self.srcPattern.match( desc.text )
 				if m:
-					srcraw = m.group(1).split( "," )[-1].split( " " )[1]
-					self.descriptionSrcs.append( srcraw )
-	def getSources( self ):
-		self.parser = xml.sax.make_parser()
-		self.handler = self.RNHandler()
-		self.parser.setContentHandler( self.handler )
-		try:
-			self.parser.parse( self.feedUrl )
-		except Exception as e:
-			logger.error( "%s trying to read from %s" % ( e, self.feedUrl ) )
-		self.parser.close()
-		self.parser.reset()
-		self.parser = None
-	def getImageURLs( self ):
-		PURL.getSources( self )
-		outSrcs = []
-		for src in self.handler.descriptionSrcs:
-			srcInfo = os.path.split( src )
-			outName = srcInfo[1]
-			outSrcs.append( [ ( outName, src ) ] )
-
-		logger.debug( outSrcs )
+					src = m.group(1)
+					srcInfo = os.path.split( src )
+					outName = srcInfo[1]
+					largeFileName = re.sub( '500', '1200', outName )
+					outFileNames = []
+					outFileNames.append( ( largeFileName, os.path.join( srcInfo[0], largeFileName ) ) )
+					outFileNames.append( ( outName, os.path.join( srcInfo[0], outName ) ) )
+					outSrcs.append( outFileNames )
 		return outSrcs
 
-class ZZ( RSS ):
-	matchAttributes = { "xmlUrl": "pictures.zz9-za.com" }
-	class ZZHandler( xml.sax.handler.ContentHandler ):
-		def __init__( self ):
-			self.data = []
-			self.descriptionSrcs = []
-			self.replacePattern = re.compile( 'viewimage' )
-		def startElement( self, name, attributes ):
-			if name == "link":
-				self.data = []
-		def characters( self, data ):
-			self.data.append( data )
-		def endElement( self, name ):
-			if name == "link":
-				linkText = self.replacePattern.sub( "image", "".join( self.data ) )
-				self.descriptionSrcs.append( linkText )
-	def getSources( self ):
-		self.parser = xml.sax.make_parser()
-		self.handler = self.ZZHandler()
-		self.parser.setContentHandler( self.handler )
-		try:
-			self.parser.parse( self.feedUrl )
-		except Exception as e:
-			logger.error( "%s trying to read from %s" % ( e, self.feedUrl ) )
-		self.parser.close()
-		self.parser.reset()
-		self.parser = None
+class PURL( Feed ):
+	""" really oddly formatted RSS feed """
+	matchAttributes = { "version": "PURL" }
+	srcPattern = re.compile( "srcset=['\"](.*?)['\"]" )
+	ns = { 'content': 'http://purl.org/rss/1.0/modules/content/' }
 	def getImageURLs( self ):
-		ZZ.getSources( self )
+		self.getSource()
 		outSrcs = []
+		for item in self.root.iter( "item" ):
+			# grab the "something-something-something..." from the link
+			linkTitle = item.find( "link" ).text.split( "/" )[-2]
+			content = item.find( "content:encoded", self.ns )
+			for m in self.srcPattern.finditer( content.text ):
+				for srcRaw in m.groups():
+					src = srcRaw.split( "," )[-1].split( " " )[1]
+					srcInfo = os.path.split( src )
+					outName = "%s-%s" % ( linkTitle, srcInfo[1] )
+					outSrcs.append( [ ( outName, src ) ] )
+		return outSrcs
+
+class ZZ( Feed ):
+	matchAttributes = { "version": "ZZ9" }
+	def getImageURLs( self ):
+		self.getSource()
+		outSrcs = []
+		replaceRE = re.compile( 'viewimage' )
 		fnameRE = re.compile( "id=(.*)$" )
-		for link in self.handler.descriptionSrcs:
+		for item in self.root.iter( "item" ):
+			link = replaceRE.sub( "image", item.find( "link" ).text )
 			m = fnameRE.search( link )
 			if m:
-				outSrcs.append( [ ( "pictures_%s.jpg" % ( m.group(1), ), link ) ] )
+				outSrcs.append( [ ( "pictures_%s.jpg" % ( m.group(1), ), link ) ] ) # yes...  I force.jpg... meh
 		return outSrcs
 
 class ATOM( Feed ):
-	"""ATOM object to parse attachment data from ATOM feed"""
+	""" ATOM object to parse data from ATOM feed """
 	matchAttributes = { "type": "atom" }
+	ns = { "atom": "http://www.w3.org/2005/Atom" }
 
 class HentaiFoundry( ATOM ):
-	matchAttributes = { "xmlUrl": "hentai-foundry" }
-
-	class HFHandler( xml.sax.handler.ContentHandler ):
-		"""Sax Handler for ATOM feed"""
-		def __init__( self ):
-			self.attachments = []
-			self.data = []
-			self.descriptionSrcs = []
-			self.srcPattern = re.compile('.*user/(.*?)/(.*?)/(.*?)$')
-			self.captureLink = False
-		def startElement( self, name, attributes ):
-			if name == "entry":
-				self.captureLink = True
-			if name == "link" and self.captureLink:
-				link = attributes["href"]
-
-				m = self.srcPattern.match( link )
+	matchAttributes = { "type": "atom", "xmlUrl": "hentai-foundry" }
+	srcRE = re.compile( '.*user/(.*?)/(.*?)/(.*?)$' )
+	grabExtensions = [ "jpg", "png", "gif" ]
+	def getImageURLs( self ):
+		self.getSource()
+		outSrcs = []
+		for entry in self.root.findall( "atom:entry", self.ns ):
+			link = entry.find( "atom:link", self.ns )
+			if link is not None:
+				link = link.attrib['href']
+				m = self.srcRE.match( link )
 				firstCharGroup = m.group(1)[0].lower()
 				if re.search( "[0-9]", firstCharGroup ):  # is this a number?
 					firstCharGroup = "0"
@@ -303,42 +247,9 @@ class HentaiFoundry( ATOM ):
 						m.group(2),
 						re.sub( "-", "_", m.group(3) )
 				)
-				self.descriptionSrcs.append( src )
-		def characters( self, data ):
-			pass
-		def endElement( self, name ):
-			pass
-			if name == "description":
-				descText = "".join(self.data)
-				#print descText
-				m = self.srcPattern.match( descText )
-				if m:
-					self.descriptionSrcs.append( m.group(1) )
-	def getSources( self ):
-		self.parser = xml.sax.make_parser()
-		self.handler = self.HFHandler()
-		self.parser.setContentHandler( self.handler )
-		try:
-			self.parser.parse( self.feedUrl )
-		except Exception as e:
-			logger.error( "%s trying to read from %s" % ( e, self.feedUrl ) )
-		self.parser.close()
-		self.parser.reset()
-		self.parser = None
-	def getImageURLs( self ):
-		self.getSources()
-		outSrcs = []
-		for src in self.handler.descriptionSrcs:
-			#print src
-			srcInfo = os.path.split( src )
-			outName = srcInfo[1]
-			#print largeFileName
-			outFileNames = []
-			outFileNames.append( ( outName+".jpg", src+".jpg" ) )
-			outFileNames.append( ( outName+".png", src+".png" ) )
-			outFileNames.append( ( outName+".gif", src+".gif" ) )
-			#print outFileNames
-			outSrcs.append( outFileNames )
+				srcInfo = os.path.split( src )
+				outName = srcInfo[1]
+				outSrcs.append( map( lambda ext: ( "%s.%s" % ( outName, ext), "%s.%s" % ( src, ext ) ), self.grabExtensions ) )
 		return outSrcs
 
 def bytesToUnitString( bytesIn, percision = 3 ):
@@ -391,32 +302,91 @@ if __name__=="__main__":
 	# run tests if asked
 	if options.runTests:
 		import unittest, os
-		class TestOMPL( unittest.TestCase ):
-
-			@classmethod
-			def setUpClass( cls ):
-				#print( "Class setup" )
-				cls.cwd = os.getcwd()
-				cls.testOMPLFileName = os.path.join( cls.cwd, "test.opml" )
-				opmlContents = """<?xml version="1.0" encoding="UTF-8"?>
+		xmlStr = """<?xml version="1.0" encoding="UTF-8"?>
 <opml version="1.1">
 	<head>
 		<title>mySubscriptions</title>
 	</head>
 	<body>
 		<!-- 'normal' feeds -->
-		<outline text="Overwatch Fan Art" description="" title="Overwatch Fan Art" type="rss" version="RSS" htmlUrl="http://overwatch-fan-art.tumblr.com/" xmlUrl="http://overwatch-fan-art.tumblr.com/rss"/>
-		<outline type="rss" version="RSS" xmlUrl="http://nicetry" />
 		<outline type="atom" version="ATOM" xmlUrl="http://atom" />
+		<outline text="Overwatch Fan Art" description="" title="Overwatch Fan Art" type="rss" version="RSS" htmlUrl="http://overwatch-fan-art.tumblr.com/" xmlUrl="http://overwatch-fan-art.tumblr.com/rss"/>
+		<outline type="rss" version="RSS" xmlUrl="https://w1.weather.gov/xml/current_obs/KSFO.rss" />
+		<outline type="xml" version="METARS" xmlUrl="https://aviationweather.gov/adds/dataserver_current/httpparam?dataSource=metars&amp;requestType=retrieve&amp;format=xml&amp;stationString=KSFO%20PHNL&amp;hoursBeforeNow=3" />
+		<outline text="RandomNude" description="" title="RandomNude" type="rss" version="PURL" htmlUrl="http://www.randomnude.com" xmlUrl="http://www.randomnude.com/feed/"/>"
 	</body>
 </opml>"""
-				open( cls.testOMPLFileName, "w" ).write( opmlContents )
+		class TestXML( unittest.TestCase ):
+			@classmethod
+			def setUpClass( cls ):
+				cls.cwd = os.getcwd()
+				cls.testOMPLFileName = os.path.join( cls.cwd, "test.opml" )
+				open( cls.testOMPLFileName, "w" ).write( xmlStr )
+			@classmethod
+			def tearDownClass( cls ):
+				os.remove( cls.testOMPLFileName )
+			def setUp( self ):
+				self.XML = XML()
+			def tearDown( self ):
+				self.XML = None
+			def test_XMLFromString( self ):
+				self.XML.setString( xmlStr )
+				self.assertEquals( xmlStr, self.XML.source["string"] )
+				self.XML.parse()
+				self.assertIsNotNone( self.XML.root )
+			def test_XMLFromString_bad( self ):
+				""" bad string should raise an error.  keep the root as None"""
+				self.XML.setString( "I am NOT XML...  Shocker, I know." )
+				self.XML.parse()
+				self.assertIsNone( self.XML.root )
+			def test_XMLFromString_badForm( self ):
+				self.XML.setString( "<file><head></head><body></file>" )
+				self.XML.parse()
+				self.assertIsNone( self.XML.root )
+			def test_XMLFromFile( self ):
+				self.XML.setFile( self.testOMPLFileName )
+				self.assertIsNotNone( self.XML.source["file"] )
+				self.XML.parse()
+				self.assertIsNotNone( self.XML.root )
+			def test_XMLFromFile_noFile( self ):
+				self.XML.setFile( "notthere.txt" )
+				self.XML.parse()
+				self.assertIsNone( self.XML.root )
+			def test_XMLFromFile_badContents( self ):
+				self.XML.setFile( ".gitignore" )
+				self.XML.parse()
+				self.assertIsNone( self.XML.root )
+			def test_XMLFromURL( self ):
+				self.XML.setURL( "https://w1.weather.gov/xml/current_obs/KSFO.xml" )
+				#https://w1.weather.gov/xml/current_obs/KSFO.rss
+				self.XML.parse()
+				self.assertIsNotNone( self.XML.root )
+				self.assertEquals( "current_observation", self.XML.root.tag )
+				print( "\n%s %s Temp: %s Wind: %s Baramoter: %s\"\n%s" %
+					( self.XML.root.find("station_id").text,
+					self.XML.root.find("weather").text,
+					self.XML.root.find("temperature_string").text,
+					self.XML.root.find("wind_string").text,
+					self.XML.root.find("pressure_in").text,
+					self.XML.root.find("observation_time").text )
+				)
+				self.assertEquals( "KSFO", self.XML.root.find("station_id").text )
+
+		class TestOMPL( unittest.TestCase ):
+			@classmethod
+			def setUpClass( cls ):
+				#print( "Class setup" )
+				cls.cwd = os.getcwd()
+				cls.testOMPLFileName = os.path.join( cls.cwd, "test.opml" )
+				open( cls.testOMPLFileName, "w" ).write( xmlStr )
 			@classmethod
 			def tearDownClass( cls ):
 				#print( "Class tearDown" )
 				os.remove( cls.testOMPLFileName )
 			def setUp( self ):
-				self.O = OPML( self.testOMPLFileName )
+				self.O = OPML( )
+				self.O.setFile( self.testOMPLFileName )
+				self.O.parse()
 			def tearDown( self ):
 				self.O = None
 			def test_parsesOPML_returnsList( self ):
@@ -427,10 +397,41 @@ if __name__=="__main__":
 				l = self.O.feeds()
 				for f in l:
 					self.assertTrue( isinstance( f, Feed ) )
-
+		class TestFEED( unittest.TestCase ):
+			pass
+		class TestTumblr( unittest.TestCase ):
+			def setUp( self ):
+				self.Tumblr = TumblrFeed( "overwatch fan art", "http://overwatch-fan-art.tumblr.com/rss" )
+			def tearDown( self ):
+				self.Tumblr = None
+			def test_GetImageList_isList( self ):
+				imageList = self.Tumblr.getImageURLs()
+				self.assertTrue( isinstance( imageList, list ) )
+		class TestPURL( unittest.TestCase ):
+			def setUp( self ):
+				self.PURL = PURL( "RandomNudes", "http://www.randomnude.com/feed/" )
+			def tearDown( self ):
+				self.PURL = None
+			def test_GetImageList_isList( self ):
+				imageList = self.PURL.getImageURLs()
+				self.assertTrue( isinstance( imageList, list ) )
+		class TestHF( unittest.TestCase ):
+			def setUp( self ):
+				self.HF = HentaiFoundry( "HF RecentPictures", "https://www.hentai-foundry.com/feed/RecentPictures" )
+			def tearDown( self ):
+				self.HF = None
+			def test_GetImageList_isList( self ):
+				imageList = self.HF.getImageURLs()
+				self.assertTrue( isinstance( imageList, list ) )
 
 		suite = unittest.TestSuite()
+		suite.addTests( unittest.makeSuite( TestXML ) )
 		suite.addTests( unittest.makeSuite( TestOMPL ) )
+		suite.addTests( unittest.makeSuite( TestFEED ) )
+		suite.addTests( unittest.makeSuite( TestTumblr ) )
+		suite.addTests( unittest.makeSuite( TestPURL ) )
+		suite.addTests( unittest.makeSuite( TestHF ) )
+
 		unittest.TextTestRunner().run( suite )
 
 		exit(1)
@@ -456,7 +457,10 @@ if __name__=="__main__":
 	totalFeedCount = 0
 	totalDownloadCount = 0
 	totalDownloadBytes = 0
-	feedList = OPML( opmlFile ).feeds()
+	O = OPML()
+	O.setFile( opmlFile )
+	O.parse()
+	feedList = O.feeds()
 	totalFeeds = len( feedList )
 	feedNum = 0
 	feedNumFormat = "%%%ii" % ( math.log10( totalFeeds ) + 1, )
@@ -597,6 +601,6 @@ if __name__=="__main__":
 			Content-Disposition: inline; filename="tumblr_nnkhk1GbHa1u4fvwpo1_1280.jpg";
 		also...  allow Content-Type return header to override / validate the expected extension
 			Content-Type: image/jpeg
-
+		get soup.io working
 
 	"""
