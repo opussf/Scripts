@@ -158,10 +158,11 @@ class RSS( Feed ):
 		self.getSource()
 		outSrcs = []
 		for item in self.root.iter( "item" ):
-			for desc in item.iter("description"):
-				srcInfo = os.path.split( desc.text )
+			for enclosure in item.iter( "enclosure" ):
+				src = enclosure.get( "url" )
+				srcInfo = os.path.split( src )
 				outName = srcInfo[1]
-				outSrcs.append( [ ( outName, desc.text ) ] )
+				outSrcs.append( [ ( outName, src ) ] )
 		return outSrcs
 
 class TumblrFeed( Feed ):
