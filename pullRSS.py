@@ -13,6 +13,33 @@ import math
 #import threading
 #import Queue
 
+class Persistance( list ):
+	""" create a persistance object
+	give this a string to track
+	ask if a string has been seen
+	"""
+	persistanceFileName = "persistance.json"
+	def __init__( self, dir ):
+		""" init the object """
+		self.persistanceFile = os.path.join( dir, self.persistanceFileName )
+		try:
+			self.storedData = json.load( open( self.persistanceFile, "r" ), parse_int=int )
+		except:
+			self.storedData = {}
+		for k in self.storedData.keys():
+			super( Persistance, self ).append( k.encode( 'ascii', 'ignore' ) )
+	def __del__( self ):
+		self.save()
+	def save( self ):
+		for item in super( Persistance, self ).__iter__():
+			if not self.storedData.get( item ):
+				self.storedData[item] = { "ts": time.time(), "time": time.strftime( "%a, %d %b %Y %H:%M:%S +0000", time.gmtime() ) }
+		try:
+			json.dump( self.storedData, open( self.persistanceFile, "w"), sort_keys=True, indent=1 )  #None for no prety
+		except Exception as e:
+			logger.critical( "%s may be critical...." % ( e, ) )
+			raise e
+
 class XML( object ):
 	""" XML object HAS an xml.sax.handler
 	An XML is a file object.  This could be a file, a string, or a URL.  <--- will depend on how the xml.sax.parser handles it.
@@ -200,7 +227,10 @@ class PURL( Feed ):
 				for srcRaw in m.groups():
 					src = srcRaw.split( "," )[-1].split( " " )[1]
 					srcInfo = os.path.split( src )
-					outName = "%s-%s" % ( linkTitle, srcInfo[1] )
+					if( linkTitle == srcInfo[1].split( "." )[0] ):
+						outName = srcInfo[1]
+					else:
+						outName = "%s-%s" % ( linkTitle, srcInfo[1] )
 					outSrcs.append( [ ( outName, src ) ] )
 		return outSrcs
 
@@ -281,7 +311,6 @@ if __name__=="__main__":
 	opmlFile = "/Users/opus/Downloads/MySubscriptions.opml"
 	destPath = "/Users/opus/Downloads/Everything/"
 	cachePath = os.path.join( destPath, ".cache", "" )
-	persistanceFile = os.path.join( cachePath, "persistance.json" )
 
 	(options, args) = parser.parse_args()
 
@@ -302,19 +331,19 @@ if __name__=="__main__":
 	if options.runTests:
 		import unittest, os
 		xmlStr = """<?xml version="1.0" encoding="UTF-8"?>
-<opml version="1.1">
-	<head>
-		<title>mySubscriptions</title>
-	</head>
-	<body>
-		<!-- 'normal' feeds -->
-		<outline type="atom" version="ATOM" xmlUrl="http://atom" />
-		<outline text="Overwatch Fan Art" description="" title="Overwatch Fan Art" type="rss" version="RSS" htmlUrl="http://overwatch-fan-art.tumblr.com/" xmlUrl="http://overwatch-fan-art.tumblr.com/rss"/>
-		<outline type="rss" version="RSS" xmlUrl="https://w1.weather.gov/xml/current_obs/KSFO.rss" />
-		<outline type="xml" version="METARS" xmlUrl="https://aviationweather.gov/adds/dataserver_current/httpparam?dataSource=metars&amp;requestType=retrieve&amp;format=xml&amp;stationString=KSFO%20PHNL&amp;hoursBeforeNow=3" />
-		<outline text="RandomNude" description="" title="RandomNude" type="rss" version="PURL" htmlUrl="http://www.randomnude.com" xmlUrl="http://www.randomnude.com/feed/"/>"
-	</body>
-</opml>"""
+				<opml version="1.1">
+					<head>
+						<title>mySubscriptions</title>
+					</head>
+					<body>
+						<!-- 'normal' feeds -->
+						<outline type="atom" version="ATOM" xmlUrl="http://atom" />
+						<outline text="Overwatch Fan Art" description="" title="Overwatch Fan Art" type="rss" version="RSS" htmlUrl="http://overwatch-fan-art.tumblr.com/" xmlUrl="http://overwatch-fan-art.tumblr.com/rss"/>
+						<outline type="rss" version="RSS" xmlUrl="https://w1.weather.gov/xml/current_obs/KSFO.rss" />
+						<outline type="xml" version="METARS" xmlUrl="https://aviationweather.gov/adds/dataserver_current/httpparam?dataSource=metars&amp;requestType=retrieve&amp;format=xml&amp;stationString=KSFO%20PHNL&amp;hoursBeforeNow=3" />
+						<outline text="RandomNude" description="" title="RandomNude" type="rss" version="PURL" htmlUrl="http://www.randomnude.com" xmlUrl="http://www.randomnude.com/feed/"/>"
+					</body>
+				</opml>"""
 		class TestXML( unittest.TestCase ):
 			@classmethod
 			def setUpClass( cls ):
@@ -451,6 +480,8 @@ if __name__=="__main__":
 	open( os.path.join( destPath, "STARTED" ), "w" ).close()
 	open( os.path.join( destPath, "DONE.txt" ), "w" ).close()
 
+	persistance = Persistance( cachePath )
+
 	# list of files in the feeds
 	cachedFilesInFeeds = []
 	totalFeedCount = 0
@@ -482,35 +513,47 @@ if __name__=="__main__":
 				cacheFile = os.path.join( cachePath, outFileName[0] )
 				destFile = os.path.join( destPath, outFileName[0] )
 				cachedFilesInFeeds.append( outFileName[0] )
-				logger.debug( "Appending: %s" % ( outFileName[0], ) )
+				logger.debug( "----> Try: %s" % ( outFileName[0], ) )
 				logger.debug( "cacheFile: %s" % ( cacheFile, ) )
 				logger.debug( " destFile: %s" % ( destFile, ) )
-				if not os.path.exists( cacheFile ):
-					logger.info( "Download: (%2i-%2i/%2i) %s" % ( downloadCount+1, srcCount, feedCount, outFileName[0] ) )
-					logger.debug("    From: %s" % ( outFileName[1], ) )
-					if not dryrun:
-						try:
-							request = urllib2.Request( outFileName[1] )
-							result = urllib2.urlopen( request )
-							#print( result.info() )
-							open( cacheFile, 'wb' ).write( result.read() )
-							shutil.copy( cacheFile, destFile )
-							downloadCount = downloadCount + 1
-							downloadBytes = downloadBytes + os.path.getsize( cacheFile )
-							result.close()
-							break # only grab the first one if it works
-						except Exception as e:
-							logger.debug( "%s ... not breaking." % ( e, ) )
-							open( cacheFile, 'w' ).write( "Tried: %s\nGot  : %s" % ( outFileName[1], e ) )
-							errors.append( "%s attemptying %s" % ( e, outFileName[1] ) )
-					else:
-						logger.info( "Not downloaded due to DRYRUN." )
-				else:  # cache file exists
+				if outFileName[0] not in persistance:   # if it is tracked, do nothing more.
+					logger.debug( "*) notTracked in persistance" )
+					if not os.path.exists( cacheFile ):  # not in the cache dir
+						logger.debug( "*) do not have locally" )
+						logger.info( "Download: (%2i-%2i/%2i) %s" % ( downloadCount+1, srcCount, feedCount, outFileName[0] ) )
+						logger.debug("    From: %s" % ( outFileName[1], ) )
+						if not dryrun:
+							try:
+								persistance.append( outFileName[0] )  # track that it was tried
+								request = urllib2.Request( outFileName[1] )
+								result = urllib2.urlopen( request )
+								#print( result.info() )
+								open( cacheFile, 'wb' ).write( result.read() )
+								shutil.copy( cacheFile, destFile )
+								downloadCount = downloadCount + 1
+								downloadBytes = downloadBytes + os.path.getsize( cacheFile )
+								result.close()
+								logger.debug( "breaking" )
+								break # only grab the first one if it works
+							except Exception as e:
+								logger.debug( "%s ... not breaking." % ( e, ) )
+								open( cacheFile, 'w' ).write( "Tried: %s\nGot  : %s" % ( outFileName[1], e ) )
+								errors.append( "%s attemptying %s" % ( e, outFileName[1] ) )
+						else:
+							logger.info( "Not downloaded due to DRYRUN." )
+					else:  # cache file exists
+						logger.debug( "XX File exists locally.  Breaking" )
+						persistance.append( outFileName[0] )  # add to the persistance object
+						break
+				else:
+					logger.debug( "XX Tracked (do not download): %s" % (outFileName[0],) )
 					break
+
 			logger.debug( "%2i errors for %s possible srcs" % ( len(errors), len( possibleSrcFiles ) ) )
 			if len( errors ) == len( possibleSrcFiles ):
 				logger.error( "%s sources returned %s errors." % (len( possibleSrcFiles ), len( errors ) ) )
 
+		persistance.save()
 		totalFeedCount = totalFeedCount + feedCount
 		totalDownloadCount = totalDownloadCount + downloadCount
 		totalDownloadBytes = totalDownloadBytes + downloadBytes
@@ -522,6 +565,8 @@ if __name__=="__main__":
 		)
 		logger.info( "  Status: %5i in feed, %5i downloaded (%s / %s)." % (
 				feedCount, downloadCount, bytesToUnitString( downloadBytes ), bytesToUnitString( totalDownloadBytes ) ) )
+		if feedCount == 0:
+			logger.warning( "Had no entries.  Is this feed still valid?" )
 
 	# reduce the size of cached files after a few days.
 	# remove the cached files a few days after they are 'zeroed' if they are not in the feeds.
@@ -535,7 +580,7 @@ if __name__=="__main__":
 		extraFiles = list( set( filenames ) - set( cachedFilesInFeeds ) )  # files that are cahced, but not in feeds.
 		logger.debug( "%s files in cache." % ( len( filenames ), ) )
 		for f in filenames:
-			logger.debug( "Examine %s" % ( f, ) )
+			#logger.debug( "Examine %s" % ( f, ) )
 			workFile = os.path.join( dirpath, f )
 			fSize = os.path.getsize( workFile )
 			fmtime = os.lstat( workFile ).st_mtime
@@ -555,14 +600,15 @@ if __name__=="__main__":
 						logger.debug( "\t..... is not in the given feeds" )
 						if not dryrun:
 							logger.info( "Remove expired cache file: %s" % ( f, ) )
-							os.remove( workFile )
+							#os.remove( workFile )
 							removedFileCount = removedFileCount + 1
 						else:
 							logger.info( "DRYRUN:  %s should be removed from cache" % ( f, ) )
 			else:
-				logger.debug( "\t..... is too young to process." )
+				#logger.debug( "\t..... is too young to process." )
+				pass
 	extraFiles.sort()
-	logger.debug( "Extra file list:\n%s" % ( "\n\t".join( extraFiles ), ) )
+	#logger.debug( "Extra file list:\n%s" % ( "\n\t".join( extraFiles ), ) )
 	logger.info( "File stats: %4i Extra, %4i Zeroed, %4i Removed" %
 			( len( extraFiles ), zeroFileCount, removedFileCount ) )
 	logger.info( "Complete: %5i in feeds, %5i downloaded (%s)." % ( totalFeedCount, totalDownloadCount, bytesToUnitString( totalDownloadBytes ) ) )
