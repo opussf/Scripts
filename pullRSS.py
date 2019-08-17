@@ -43,7 +43,7 @@ class XML( object ):
 	def parse( self ):
 		if len( self.source ) == 1:  # only
 			self.tree = None
-			self.root = None
+			self.root = ET.Element( 'None' )
 			if "string" in self.source:
 				try:
 					self.root = ET.fromstring( self.source["string"] )
@@ -64,7 +64,6 @@ class XML( object ):
 				finally:
 					request = None
 					result = None
-
 		else:
 			# throw an exception of some sort here....
 			logger.error( "I have no sources to parse." )
@@ -149,7 +148,6 @@ class Feed( XML ):
 
 class METARS( Feed ):
 	matchAttributes = { "version": "METARS" }
-
 
 class RSS( Feed ):
 	"""RSS object to parse attachment data from RSS feed"""
