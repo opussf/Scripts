@@ -305,13 +305,15 @@ if __name__=="__main__":
 			help="quiet the logger." )
 	parser.add_option( "-z", "--zero", action="store", type="int", dest="zeroDays", default=3,
 			help="zero locally cached files after this number of days." )
-	if os.path.exists( "pullRSS_Test.py" ):  #if my test file exists, provide an option to run the tests.
-		parser.add_option( "-t", "--test", action="store_true", dest="runTests", default=False,
-			help="Run self tests." )
 	parser.add_option( "-o", "--opml", action="store", type="string", dest="opmlFile", default="~/Downloads/MySubscriptions.opml",
 			help="Set which opml file to parse.\n[default: %default]" )
 	parser.add_option( "", "--dest", action="store", type="string", dest="destPath", default="~/Downloads/Everything",
 			help="Set the destination path.\n[default: %default]" )
+	if os.path.exists( "pullRSS_Test.py" ):  #if my test file exists, provide an option to run the tests.
+		parser.add_option( "-t", "--test", action="store_true", dest="runTests", default=False,
+			help="Run self tests." )
+	else:
+		parser.set_defaults( runTests=False )
 
 	(options, args) = parser.parse_args()
 
