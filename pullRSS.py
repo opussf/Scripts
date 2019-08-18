@@ -19,9 +19,10 @@ class Persistance( list ):
 	ask if a string has been seen
 	"""
 	persistanceFileName = "persistance.json"
-	def __init__( self, dir ):
+	def __init__( self, dir, pretty=False ):
 		""" init the object """
 		self.persistanceFile = os.path.join( dir, self.persistanceFileName )
+		self.pretty = pretty and 4 or None
 		try:
 			self.storedData = json.load( open( self.persistanceFile, "r" ), parse_int=int )
 		except:
@@ -35,7 +36,7 @@ class Persistance( list ):
 			if not self.storedData.get( item ):
 				self.storedData[item] = { "ts": time.time(), "time": time.strftime( "%a, %d %b %Y %H:%M:%S +0000", time.gmtime() ) }
 		try:
-			json.dump( self.storedData, open( self.persistanceFile, "w"), sort_keys=True, indent=1 )  #None for no prety
+			json.dump( self.storedData, open( self.persistanceFile, "w"), sort_keys=True, indent=self.pretty )  #None for no prety
 		except Exception as e:
 			logger.critical( "%s may be critical...." % ( e, ) )
 			raise e
@@ -480,7 +481,7 @@ if __name__=="__main__":
 	open( os.path.join( destPath, "STARTED" ), "w" ).close()
 	open( os.path.join( destPath, "DONE.txt" ), "w" ).close()
 
-	persistance = Persistance( cachePath )
+	persistance = Persistance( cachePath, pretty=options.verbose )
 
 	# list of files in the feeds
 	cachedFilesInFeeds = []
@@ -641,11 +642,11 @@ if __name__=="__main__":
 	"""
 
 	""" Todos:
-		Make RSS work (handler)
 		allow parsing of http header return to parse for filename, and overwrite target filename...  not sure how this will affect cache...
 			Content-Disposition: inline; filename="tumblr_nnkhk1GbHa1u4fvwpo1_1280.jpg";
 		also...  allow Content-Type return header to override / validate the expected extension
 			Content-Type: image/jpeg
-		get soup.io working
+		Look into having this take a feed url and return data from it, from the CLI and returned to stdout (no logging).
+
 
 	"""
