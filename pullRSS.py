@@ -21,6 +21,7 @@ class Persistance( list ):
 	persistanceFileName = "persistance.json"
 	def __init__( self, dir, pretty=False ):
 		""" init the object """
+		self.logger = logging.getLogger( "pullRSS" )
 		self.persistanceFile = os.path.join( dir, self.persistanceFileName )
 		self.pretty = pretty and 4 or None
 		try:
@@ -38,7 +39,7 @@ class Persistance( list ):
 		try:
 			json.dump( self.storedData, open( self.persistanceFile, "w"), sort_keys=True, indent=self.pretty )  #None for no prety
 		except Exception as e:
-			logger.critical( "%s may be critical...." % ( e, ) )
+			self.logger.critical( "%s may be critical...." % ( e, ) )
 			raise e
 
 class XML( object ):
@@ -50,6 +51,7 @@ class XML( object ):
 		self.tree = None
 		self.root = None
 		self.source = { "file": None, "url": None, "string": None }
+		self.logger = logging.getLogger( "pullRSS" )
 	def __clearsource( self ):
 		""" clears other sources """
 		for k in self.source.keys():
@@ -76,25 +78,25 @@ class XML( object ):
 				try:
 					self.root = ET.fromstring( self.source["string"] )
 				except ET.ParseError as e:
-					logger.error( "%s trying to parse string." % ( e, ) )
+					self.logger.error( "%s trying to parse string." % ( e, ) )
 			if "file" in self.source:
 				try:
 					self.root = ET.parse( self.source["file"] ).getroot()
 				except (IOError, ET.ParseError) as e:
-					logger.error( "%s trying to parse file %s" % ( e, self.source["file"] ) )
+					self.logger.error( "%s trying to parse file %s" % ( e, self.source["file"] ) )
 			if "url" in self.source:
 				try:
 					request = urllib2.Request( self.source["url"] )
 					result = urllib2.urlopen( request )
 					self.root = ET.fromstring( result.read() )
 				except (urllib2.URLError, ET.ParseError) as e:
-					logger.error( "%s: %s trying to read from %s" % ( e.__class__.__name__, e, self.source["url"] ) )
+					self.logger.error( "%s: %s trying to read from %s" % ( e.__class__.__name__, e, self.source["url"] ) )
 				finally:
 					request = None
 					result = None
 		else:
 			# throw an exception of some sort here....
-			logger.error( "I have no sources to parse." )
+			self.logger.error( "I have no sources to parse." )
 
 class OPML( XML ):
 	""" OPML object to parse RSS data from OPML
@@ -113,10 +115,10 @@ class Feed( XML ):
 	attributes = {}
 	def __init__( self, title, feedUrl ):
 		""" This takes an attributes dictionary """
-		logger.debug( "Feed.__init__( %s, %s ) " % ( title, feedUrl ) )
+		super( Feed, self ).__init__()
+		self.logger.debug( "Feed.__init__( %s, %s ) " % ( title, feedUrl ) )
 		self.title = title
 		self.feedUrl = feedUrl
-		super( Feed, self ).__init__()
 		self.setURL( self.feedUrl )
 	def getSource( self ):
 		self.parse()
@@ -142,6 +144,7 @@ class Feed( XML ):
 	def factory( attributes ):
 		""" determines which subclass to return
 		"""
+		logger = logging.getLogger( "pullRSS" )
 		subTypes = Feed.__getSubTypes( Feed )
 		if "title" in attributes.keys():
 			title = attributes["title"]
@@ -293,10 +296,6 @@ def bytesToUnitString( bytesIn, percision = 3 ):
 	return( format % ( bytesIn, units[count] ) )
 
 if __name__=="__main__":
-	""" TODO:  build a list of files in the RSS feeds, and in the cache dir.
-		Remove files in the cache dir that are not in the feed.
-	"""
-
 	parser = OptionParser()
 	parser.add_option( "-d", "--dryrun", action="store_false", dest="dryrun", default=True,
 			help="Disable the default dryrun. Actually perform actions." )
@@ -306,14 +305,19 @@ if __name__=="__main__":
 			help="quiet the logger." )
 	parser.add_option( "-z", "--zero", action="store", type="int", dest="zeroDays", default=3,
 			help="zero locally cached files after this number of days." )
-	parser.add_option( "-t", "--test", action="store_true", dest="runTests", default=False,
+	if os.path.exists( "pullRSS_Test.py" ):  #if my test file exists, provide an option to run the tests.
+		parser.add_option( "-t", "--test", action="store_true", dest="runTests", default=False,
 			help="Run self tests." )
-
-	opmlFile = "/Users/opus/Downloads/MySubscriptions.opml"
-	destPath = "/Users/opus/Downloads/Everything/"
-	cachePath = os.path.join( destPath, ".cache", "" )
+	parser.add_option( "-o", "--opml", action="store", type="string", dest="opmlFile", default="~/Downloads/MySubscriptions.opml",
+			help="Set which opml file to parse.\n[default: %default]" )
+	parser.add_option( "", "--dest", action="store", type="string", dest="destPath", default="~/Downloads/Everything",
+			help="Set the destination path.\n[default: %default]" )
 
 	(options, args) = parser.parse_args()
+
+	opmlFile = os.path.expanduser( os.path.expandvars( options.opmlFile ) )
+	destPath = os.path.join( os.path.expanduser( os.path.expandvars( options.destPath ) ), "" )
+	cachePath = os.path.join( destPath, ".cache", "" )
 
 	# init logger
 	logger = logging.getLogger( "pullRSS" )
@@ -330,145 +334,20 @@ if __name__=="__main__":
 
 	# run tests if asked
 	if options.runTests:
-		import unittest, os
-		xmlStr = """<?xml version="1.0" encoding="UTF-8"?>
-				<opml version="1.1">
-					<head>
-						<title>mySubscriptions</title>
-					</head>
-					<body>
-						<!-- 'normal' feeds -->
-						<outline type="atom" version="ATOM" xmlUrl="http://atom" />
-						<outline text="Overwatch Fan Art" description="" title="Overwatch Fan Art" type="rss" version="RSS" htmlUrl="http://overwatch-fan-art.tumblr.com/" xmlUrl="http://overwatch-fan-art.tumblr.com/rss"/>
-						<outline type="rss" version="RSS" xmlUrl="https://w1.weather.gov/xml/current_obs/KSFO.rss" />
-						<outline type="xml" version="METARS" xmlUrl="https://aviationweather.gov/adds/dataserver_current/httpparam?dataSource=metars&amp;requestType=retrieve&amp;format=xml&amp;stationString=KSFO%20PHNL&amp;hoursBeforeNow=3" />
-						<outline text="RandomNude" description="" title="RandomNude" type="rss" version="PURL" htmlUrl="http://www.randomnude.com" xmlUrl="http://www.randomnude.com/feed/"/>"
-					</body>
-				</opml>"""
-		class TestXML( unittest.TestCase ):
-			@classmethod
-			def setUpClass( cls ):
-				cls.cwd = os.getcwd()
-				cls.testOMPLFileName = os.path.join( cls.cwd, "test.opml" )
-				open( cls.testOMPLFileName, "w" ).write( xmlStr )
-			@classmethod
-			def tearDownClass( cls ):
-				os.remove( cls.testOMPLFileName )
-			def setUp( self ):
-				self.XML = XML()
-			def tearDown( self ):
-				self.XML = None
-			def test_XMLFromString( self ):
-				self.XML.setString( xmlStr )
-				self.assertEquals( xmlStr, self.XML.source["string"] )
-				self.XML.parse()
-				self.assertIsNotNone( self.XML.root )
-			def test_XMLFromString_bad( self ):
-				""" bad string should raise an error.  keep the root as None"""
-				self.XML.setString( "I am NOT XML...  Shocker, I know." )
-				self.XML.parse()
-				self.assertIsNone( self.XML.root )
-			def test_XMLFromString_badForm( self ):
-				self.XML.setString( "<file><head></head><body></file>" )
-				self.XML.parse()
-				self.assertIsNone( self.XML.root )
-			def test_XMLFromFile( self ):
-				self.XML.setFile( self.testOMPLFileName )
-				self.assertIsNotNone( self.XML.source["file"] )
-				self.XML.parse()
-				self.assertIsNotNone( self.XML.root )
-			def test_XMLFromFile_noFile( self ):
-				self.XML.setFile( "notthere.txt" )
-				self.XML.parse()
-				self.assertIsNone( self.XML.root )
-			def test_XMLFromFile_badContents( self ):
-				self.XML.setFile( ".gitignore" )
-				self.XML.parse()
-				self.assertIsNone( self.XML.root )
-			def test_XMLFromURL( self ):
-				self.XML.setURL( "https://w1.weather.gov/xml/current_obs/KSFO.xml" )
-				#https://w1.weather.gov/xml/current_obs/KSFO.rss
-				self.XML.parse()
-				self.assertIsNotNone( self.XML.root )
-				self.assertEquals( "current_observation", self.XML.root.tag )
-				print( "\n%s %s Temp: %s Wind: %s Baramoter: %s\"\n%s" %
-					( self.XML.root.find("station_id").text,
-					self.XML.root.find("weather").text,
-					self.XML.root.find("temperature_string").text,
-					self.XML.root.find("wind_string").text,
-					self.XML.root.find("pressure_in").text,
-					self.XML.root.find("observation_time").text )
-				)
-				self.assertEquals( "KSFO", self.XML.root.find("station_id").text )
-
-		class TestOMPL( unittest.TestCase ):
-			@classmethod
-			def setUpClass( cls ):
-				#print( "Class setup" )
-				cls.cwd = os.getcwd()
-				cls.testOMPLFileName = os.path.join( cls.cwd, "test.opml" )
-				open( cls.testOMPLFileName, "w" ).write( xmlStr )
-			@classmethod
-			def tearDownClass( cls ):
-				#print( "Class tearDown" )
-				os.remove( cls.testOMPLFileName )
-			def setUp( self ):
-				self.O = OPML( )
-				self.O.setFile( self.testOMPLFileName )
-				self.O.parse()
-			def tearDown( self ):
-				self.O = None
-			def test_parsesOPML_returnsList( self ):
-				""" OPML object returns a list """
-				l = self.O.feeds()
-				self.assertTrue( isinstance( l, list ) )
-			def test_parsesOPML_listHasFeeds( self ):
-				l = self.O.feeds()
-				for f in l:
-					self.assertTrue( isinstance( f, Feed ) )
-		class TestFEED( unittest.TestCase ):
-			pass
-		class TestTumblr( unittest.TestCase ):
-			def setUp( self ):
-				self.Tumblr = TumblrFeed( "overwatch fan art", "http://overwatch-fan-art.tumblr.com/rss" )
-			def tearDown( self ):
-				self.Tumblr = None
-			def test_GetImageList_isList( self ):
-				imageList = self.Tumblr.getImageURLs()
-				self.assertTrue( isinstance( imageList, list ) )
-		class TestPURL( unittest.TestCase ):
-			def setUp( self ):
-				self.PURL = PURL( "RandomNudes", "http://www.randomnude.com/feed/" )
-			def tearDown( self ):
-				self.PURL = None
-			def test_GetImageList_isList( self ):
-				imageList = self.PURL.getImageURLs()
-				self.assertTrue( isinstance( imageList, list ) )
-		class TestHF( unittest.TestCase ):
-			def setUp( self ):
-				self.HF = HentaiFoundry( "HF RecentPictures", "https://www.hentai-foundry.com/feed/RecentPictures" )
-			def tearDown( self ):
-				self.HF = None
-			def test_GetImageList_isList( self ):
-				imageList = self.HF.getImageURLs()
-				self.assertTrue( isinstance( imageList, list ) )
-
-		suite = unittest.TestSuite()
-		suite.addTests( unittest.makeSuite( TestXML ) )
-		suite.addTests( unittest.makeSuite( TestOMPL ) )
-		suite.addTests( unittest.makeSuite( TestFEED ) )
-		suite.addTests( unittest.makeSuite( TestTumblr ) )
-		suite.addTests( unittest.makeSuite( TestPURL ) )
-		suite.addTests( unittest.makeSuite( TestHF ) )
-
+		from pullRSS_Test import *
+		import unittest
 		unittest.TextTestRunner().run( suite )
 
 		exit(1)
 
 	dryrun = options.dryrun
 	logger.info( "Starting" )
+
 	if dryrun:
 		logger.warning( "DRYRUN engaged (use -d to disable dry run)" )
+	logger.debug( "OPMLFile: %s" % ( opmlFile, ) )
+	logger.debug( "DestPath: %s" % ( destPath, ) )
+
 
 	# make the cache dir if it does not exist
 	try:
