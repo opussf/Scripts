@@ -41,7 +41,6 @@ class Persistance( list ):
 		except Exception as e:
 			self.logger.critical( "%s may be critical...." % ( e, ) )
 			raise e
-
 class XML( object ):
 	""" XML object HAS an xml.sax.handler
 	An XML is a file object.  This could be a file, a string, or a URL.  <--- will depend on how the xml.sax.parser handles it.
@@ -97,7 +96,6 @@ class XML( object ):
 		else:
 			# throw an exception of some sort here....
 			self.logger.error( "I have no sources to parse." )
-
 class OPML( XML ):
 	""" OPML object to parse RSS data from OPML
 	OPML is very freeform on the <outline> tag.  Only the <opml><head><body><outline> tags are required.
@@ -109,7 +107,6 @@ class OPML( XML ):
 			for outline in self.root.iter('outline'):
 				self.feedList.append( Feed.factory( outline.attrib ) )
 		return self.feedList
-
 class Feed( XML ):
 	""" This is a factory class """
 	attributes = {}
@@ -176,10 +173,8 @@ class Feed( XML ):
 			return matchedType( title or attributes["xmlUrl"], attributes["xmlUrl"] )
 		else:
 			logger.error( "Unable to match to a known type." )
-
 class METARS( Feed ):
 	matchAttributes = { "version": "METARS" }
-
 class RSS( Feed ):
 	"""RSS object to parse attachment data from RSS feed"""
 	matchAttributes = { "type": "rss", "version": "RSS" }
@@ -193,7 +188,6 @@ class RSS( Feed ):
 				outName = srcInfo[1]
 				outSrcs.append( [ ( outName, src ) ] )
 		return outSrcs
-
 class TumblrFeed( Feed ):
 	matchAttributes = { "xmlUrl": "tumblr.com" }
 	srcPattern = re.compile('.*src=["\'](.*?)["\'].*')
@@ -214,7 +208,6 @@ class TumblrFeed( Feed ):
 					outFileNames.append( ( outName, os.path.join( srcInfo[0], outName ) ) )
 					outSrcs.append( outFileNames )
 		return outSrcs
-
 class PURL( Feed ):
 	""" really oddly formatted RSS feed """
 	matchAttributes = { "version": "PURL" }
@@ -237,6 +230,27 @@ class PURL( Feed ):
 						outName = "%s-%s" % ( linkTitle, srcInfo[1] )
 					outSrcs.append( [ ( outName, src ) ] )
 		return outSrcs
+class MyConfinedSpace( PURL ):
+	matchAttributes = { "version": "PURL", "xmlUrl": "myconfinedspace.com" }
+	srcPattern = re.compile( "src=['\"](.*?)['\"]" )
+	def getImageURLs( self ):
+		self.getSource()
+		outSrcs = []
+		for item in self.root.iter( "item" ):
+			# grab the "something-something-something..." from the link
+			linkTitle = item.find( "link" ).text.split( "/" )[-2]
+			content = item.find( "content:encoded", self.ns )
+			for m in self.srcPattern.finditer( content.text ):
+				for srcRaw in m.groups():
+					src = srcRaw.split( "," )[0].split( " " )[0]
+					srcInfo = os.path.split( src )
+					if( linkTitle == srcInfo[1].split( "." )[0] ):
+						outName = srcInfo[1]
+					else:
+						outName = "%s-%s" % ( linkTitle, srcInfo[1] )
+					outName = "mcs-"+outName
+					outSrcs.append( [ ( outName, src ) ] )
+		return outSrcs
 
 class ZZ( Feed ):
 	matchAttributes = { "version": "ZZ9" }
@@ -251,12 +265,12 @@ class ZZ( Feed ):
 			if m:
 				outSrcs.append( [ ( "pictures_%s.jpg" % ( m.group(1), ), link ) ] ) # yes...  I force.jpg... meh
 		return outSrcs
-
 class ATOM( Feed ):
 	""" ATOM object to parse data from ATOM feed """
 	matchAttributes = { "type": "atom" }
 	ns = { "atom": "http://www.w3.org/2005/Atom" }
-
+	def getImageURLs( self ):
+		return []
 class HentaiFoundry( ATOM ):
 	matchAttributes = { "type": "atom", "xmlUrl": "hentai-foundry" }
 	srcRE = re.compile( '.*user/(.*?)/(.*?)/(.*?)$' )
@@ -284,7 +298,6 @@ class HentaiFoundry( ATOM ):
 				outName = srcInfo[1]
 				outSrcs.append( map( lambda ext: ( "%s.%s" % ( outName, ext), "%s.%s" % ( src, ext ) ), self.grabExtensions ) )
 		return outSrcs
-
 def bytesToUnitString( bytesIn, percision = 3 ):
 	unitSize = 1000.0
 	units = [ " B", "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB" ]
@@ -300,11 +313,11 @@ if __name__=="__main__":
 	parser.add_option( "-d", "--dryrun", action="store_false", dest="dryrun", default=True,
 			help="Disable the default dryrun. Actually perform actions." )
 	parser.add_option( "-v", "--verbose", action="store_true", dest="verbose", default=False,
-			help="turn on debug output." )
+			help="Verbose output (Debug on)." )
 	parser.add_option( "-q", "--quiet", action="store_true", dest="quiet", default=False,
-			help="quiet the logger." )
+			help="Quiets the logger." )
 	parser.add_option( "-z", "--zero", action="store", type="int", dest="zeroDays", default=3,
-			help="zero locally cached files after this number of days." )
+			help="zero locally cached files after this number of days. [default: %default]" )
 	parser.add_option( "-o", "--opml", action="store", type="string", dest="opmlFile", default="~/Downloads/MySubscriptions.opml",
 			help="Set which opml file to parse.\n[default: %default]" )
 	parser.add_option( "", "--dest", action="store", type="string", dest="destPath", default="~/Downloads/Everything",
