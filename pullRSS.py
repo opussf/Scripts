@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 import re
 import urllib2, os
 import shutil
-import logging
+import logging, sys
 from optparse import OptionParser
 import time
 import json
@@ -19,7 +19,7 @@ class Persistance( list ):
 	ask if a string has been seen
 	"""
 	persistanceFileName = "persistance.json"
-	def __init__( self, dir, pretty=False ):
+	def __init__( self, dir=".", pretty=False ):
 		""" init the object """
 		self.logger = logging.getLogger( "pullRSS" )
 		self.persistanceFile = os.path.join( dir, self.persistanceFileName )
@@ -35,11 +35,15 @@ class Persistance( list ):
 	def save( self ):
 		for item in super( Persistance, self ).__iter__():
 			if not self.storedData.get( item ):
-				self.storedData[item] = { "ts": time.time(), "time": time.strftime( "%a, %d %b %Y %H:%M:%S +0000", time.gmtime() ) }
+				#self.storedData[item] = { "ts": time.time(), "time": time.strftime( "%a, %d %b %Y %H:%M:%S +0000", time.gmtime() ) }
+				self.storedData[item] = { "ts": time.time() }
 		try:
 			json.dump( self.storedData, open( self.persistanceFile, "w"), sort_keys=True, indent=self.pretty )  #None for no prety
 		except Exception as e:
-			self.logger.critical( "%s may be critical...." % ( e, ) )
+			if self.logger is not None:
+				self.logger.critical( "%s may be critical...." % ( e, ) )
+			else:
+				print( "%s may be critical...." % ( e, ) )
 			raise e
 class XML( object ):
 	""" XML object HAS an xml.sax.handler
@@ -97,16 +101,20 @@ class XML( object ):
 			# throw an exception of some sort here....
 			self.logger.error( "I have no sources to parse." )
 class OPML( XML ):
-	""" OPML object to parse RSS data from OPML
+	""" OPML object to parse Outline data from OPML
 	OPML is very freeform on the <outline> tag.  Only the <opml><head><body><outline> tags are required.
 	parse all the outline attributes into a dictionary, and put the dictionaries in a list
 	"""
 	feedList = [] #list of Feed objects
 	def feeds( self ):
+		""" return the list of feeds """
+		self.feedList = []
 		if self.root is not None:
 			for outline in self.root.iter('outline'):
 				self.feedList.append( Feed.factory( outline.attrib ) )
 		return self.feedList
+	def addFeed( self, feedUrl ):
+		pass
 class Feed( XML ):
 	""" This is a factory class """
 	attributes = {}
@@ -251,7 +259,6 @@ class MyConfinedSpace( PURL ):
 					outName = "mcs-"+outName
 					outSrcs.append( [ ( outName, src ) ] )
 		return outSrcs
-
 class ZZ( Feed ):
 	matchAttributes = { "version": "ZZ9" }
 	def getImageURLs( self ):
@@ -265,6 +272,36 @@ class ZZ( Feed ):
 			if m:
 				outSrcs.append( [ ( "pictures_%s.jpg" % ( m.group(1), ), link ) ] ) # yes...  I force.jpg... meh
 		return outSrcs
+class SandraAndWoo( Feed ):
+	matchAttributes = { "xmlUrl": "sandraandwoo" }
+	srcPattern = re.compile( "src=['\"](.*?)['\"]" )
+	def getImageURLs( self ):
+		replaceRE = re.compile( 'comics_rss' )
+		self.getSource()
+		outSrcs = []
+		for item in self.root.iter( "item" ):
+			for m in self.srcPattern.finditer( item.find( "description" ).text ):
+				for srcRaw in m.groups():
+					src = "http://www.sandraandwoo.com/%s" % ( replaceRE.sub( "comics", srcRaw ), )
+					outName = "SandraAndWoo_%s" % ( srcRaw.split( "/" )[-1], )
+					outSrcs.append( [ ( outName, src ) ] )
+		return outSrcs
+class SchlockMercenary( Feed ):
+	matchAttributes = { "xmlUrl": "Schlockmercenary" }
+	srcPattern = re.compile( "src=['\"](.*?)[\?]" )
+	def getImageURLs( self ):
+		replaceRE = re.compile( 'comics_rss' )
+		self.getSource()
+		outSrcs = []
+		for item in self.root.iter( "item" ):
+			if re.search( "Schlock", item.find( "title" ).text ):
+				for m in self.srcPattern.finditer( item.find( "description" ).text ):
+					for srcRaw in m.groups():
+						outName = srcRaw.split( "/" )[-1]
+						outSrcs.append( [ ( outName, srcRaw ) ] )
+		return outSrcs
+
+
 class ATOM( Feed ):
 	""" ATOM object to parse data from ATOM feed """
 	matchAttributes = { "type": "atom" }
@@ -305,8 +342,13 @@ def bytesToUnitString( bytesIn, percision = 3 ):
 	while bytesIn >= unitSize:
 		bytesIn = bytesIn / unitSize
 		count = count + 1
-	format = "%%%i.%if %%s" % ( percision+4, percision )
+	format = "%%%i.%if %%s" % ( percision + ( ( percision == 0 ) and 3 or 4 ), percision )
 	return( format % ( bytesIn, units[count] ) )
+def sanitizeFileName( filenameIn ):
+	badChars = "'"
+	#filenameNew = re.sub( badChars, filenameIn, "_" )
+	filenameNew = "".join( [ "_" if c in badChars else c for c in filenameIn ] )
+	return filenameNew
 
 if __name__=="__main__":
 	parser = OptionParser()
@@ -322,6 +364,12 @@ if __name__=="__main__":
 			help="Set which opml file to parse.\n[default: %default]" )
 	parser.add_option( "", "--dest", action="store", type="string", dest="destPath", default="~/Downloads/Everything",
 			help="Set the destination path.\n[default: %default]" )
+	parser.add_option( "-f", "--filter", action="store", type="string", dest="filter",
+			help="Use this RE expression as a filter." )
+	parser.add_option( "-a", "--add", action="store", type="string", dest="addURL",
+			help="Add a feed." )
+
+
 	if os.path.exists( "pullRSS_Test.py" ):  #if my test file exists, provide an option to run the tests.
 		parser.add_option( "-t", "--test", action="store_true", dest="runTests", default=False,
 			help="Run self tests." )
@@ -334,11 +382,15 @@ if __name__=="__main__":
 	destPath = os.path.join( os.path.expanduser( os.path.expandvars( options.destPath ) ), "" )
 	cachePath = os.path.join( destPath, ".cache", "" )
 
+	filterRE = None
+	if options.filter is not None:
+		filterRE = re.compile( options.filter, flags=re.I )
+
 	# init logger
 	logger = logging.getLogger( "pullRSS" )
 	logger.setLevel( logging.DEBUG )
 
-	sh = logging.StreamHandler()
+	sh = logging.StreamHandler( sys.stdout )
 	sh.setLevel( (options.verbose and logging.DEBUG)
 			or ((options.quiet or options.runTests) and logging.WARNING)
 			or logging.INFO )
@@ -376,6 +428,7 @@ if __name__=="__main__":
 	open( os.path.join( destPath, "DONE.txt" ), "w" ).close()
 
 	persistance = Persistance( cachePath, pretty=options.verbose )
+	filterAttributes = [ "title", "feedUrl" ]
 
 	# list of files in the feeds
 	cachedFilesInFeeds = []
@@ -391,6 +444,17 @@ if __name__=="__main__":
 	feedNumFormat = "%%%ii" % ( math.log10( totalFeeds ) + 1, )
 	logger.debug( "list count format: %s" % ( feedNumFormat ), )
 	for feed in feedList:
+		if filterRE is not None:
+			match = False
+			logger.debug( "Filter is active" )
+			for att in filterAttributes:
+				logger.debug( "%s: %s" % ( att, feed.__getattribute__( att ), ) )
+				if filterRE.search( feed.__getattribute__( att ) ):
+					match = True
+					logger.debug( "I matched an attribute." )
+			if not match:
+				logger.debug( "Match was not found... break")
+				continue
 		feedNum = feedNum + 1
 		logger.info( "Processing: (%s/%s) %s: %s" %
 				( feedNumFormat % ( feedNum, ), feedNumFormat % ( totalFeeds, ),
@@ -405,8 +469,8 @@ if __name__=="__main__":
 			logger.debug( "workwith src: %s" % ( possibleSrcFiles, ) )
 			errors = []
 			for outFileName in possibleSrcFiles:
-				cacheFile = os.path.join( cachePath, outFileName[0] )
-				destFile = os.path.join( destPath, outFileName[0] )
+				cacheFile = sanitizeFileName( os.path.join( cachePath, outFileName[0] ) )
+				destFile = sanitizeFileName( os.path.join( destPath, outFileName[0] ) )
 				cachedFilesInFeeds.append( outFileName[0] )
 				logger.debug( "----> Try: %s" % ( outFileName[0], ) )
 				logger.debug( "cacheFile: %s" % ( cacheFile, ) )
@@ -471,37 +535,40 @@ if __name__=="__main__":
 	zeroFileCount = 0
 	removedFileCount = 0
 	extraFiles = []
-	for (dirpath, dirnames, filenames) in os.walk( cachePath ):
-		extraFiles = list( set( filenames ) - set( cachedFilesInFeeds ) )  # files that are cahced, but not in feeds.
-		logger.debug( "%s files in cache." % ( len( filenames ), ) )
-		for f in filenames:
-			#logger.debug( "Examine %s" % ( f, ) )
-			workFile = os.path.join( dirpath, f )
-			fSize = os.path.getsize( workFile )
-			fmtime = os.lstat( workFile ).st_mtime
-			if( fmtime < cutofftime ):  # older than cutoff
-				logger.debug( "\t..... is older than the cutoff" )
-				if( fSize > 10 ): # file has not been 'zeroed'  --- >512 should keep the "error" files intact Use 10 otherwise
-					logger.debug( "\t..... should be reduced" )
-					if not dryrun:
-						logger.debug( "Write 0 to: .cache/%s" % ( f, ) )
-						open( workFile, "w" ).write( "0" )
-						zeroFileCount = zeroFileCount + 1
-					else:
-						logger.info( "DRYRUN:  %s should be zeroed" % ( f, ) )
-				else: # file HAS been 'zeroed'
-					logger.debug( "\t..... has been zeroed" )
-					if( f in extraFiles ):
-						logger.debug( "\t..... is not in the given feeds" )
+	if filterRE is None:
+		logger.debug( "Filter is not set, prune files....." )
+		for (dirpath, dirnames, filenames) in os.walk( cachePath ):
+			extraFiles = list( set( filenames ) - set( cachedFilesInFeeds ) )  # files that are cahced, but not in feeds.
+			logger.debug( "%s files in cache." % ( len( filenames ), ) )
+			for f in filenames:
+				workFile = os.path.join( dirpath, f )
+				fSize = os.path.getsize( workFile )
+				fmtime = os.lstat( workFile ).st_mtime
+				logger.debug( "Examine %s (%s) %s " % ( time.strftime( "%X %x", time.localtime( fmtime ) ), bytesToUnitString( fSize, 0 ), f ) )
+				if( fmtime < cutofftime ):  # older than cutoff
+					logger.debug( "\t..... is older than the cutoff" )
+					if( fSize > 10 ): # file has not been 'zeroed'  --- >512 should keep the "error" files intact Use 10 otherwise
+						logger.debug( "\t..... should be reduced" )
 						if not dryrun:
-							logger.info( "Remove expired cache file: %s" % ( f, ) )
-							#os.remove( workFile )
-							removedFileCount = removedFileCount + 1
+							logger.debug( "Write 0 to: .cache/%s" % ( f, ) )
+							open( workFile, "w" ).write( "0" )
+							zeroFileCount = zeroFileCount + 1
 						else:
-							logger.info( "DRYRUN:  %s should be removed from cache" % ( f, ) )
-			else:
-				#logger.debug( "\t..... is too young to process." )
-				pass
+							logger.info( "DRYRUN:  %s should be zeroed" % ( f, ) )
+					else: # file HAS been 'zeroed'
+						logger.debug( "\t..... has been zeroed" )
+						if( f in extraFiles ):
+							logger.debug( "\t..... is not in the given feeds" )
+							if not dryrun:
+								logger.debug( "Remove expired cache file: %s" % ( f, ) )
+								os.remove( workFile )
+								removedFileCount = removedFileCount + 1
+							else:
+								logger.debug( "DRYRUN:  %s should be removed from cache" % ( f, ) )
+						else:
+							logger.debug( "\t..... is still in the feeds" )
+				else:
+					logger.debug( "\t..... is too young to process." )
 	extraFiles.sort()
 	#logger.debug( "Extra file list:\n%s" % ( "\n\t".join( extraFiles ), ) )
 	logger.info( "File stats: %4i Extra, %4i Zeroed, %4i Removed" %
