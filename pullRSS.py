@@ -35,8 +35,7 @@ class Persistance( list ):
 	def save( self ):
 		for item in super( Persistance, self ).__iter__():
 			if not self.storedData.get( item ):
-				#self.storedData[item] = { "ts": time.time(), "time": time.strftime( "%a, %d %b %Y %H:%M:%S +0000", time.gmtime() ) }
-				self.storedData[item] = { "ts": time.time() }
+				self.storedData[item] = { "ts": time.time(), "time": time.strftime( "%a, %d %b %Y %H:%M:%S +0000", time.gmtime() ) }
 		try:
 			json.dump( self.storedData, open( self.persistanceFile, "w"), sort_keys=True, indent=self.pretty )  #None for no prety
 		except Exception as e:
