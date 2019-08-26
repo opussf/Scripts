@@ -299,8 +299,6 @@ class SchlockMercenary( Feed ):
 						outName = srcRaw.split( "/" )[-1]
 						outSrcs.append( [ ( outName, srcRaw ) ] )
 		return outSrcs
-
-
 class ATOM( Feed ):
 	""" ATOM object to parse data from ATOM feed """
 	matchAttributes = { "type": "atom" }
@@ -427,6 +425,7 @@ if __name__=="__main__":
 	open( os.path.join( destPath, "DONE.txt" ), "w" ).close()
 
 	persistance = Persistance( cachePath, pretty=options.verbose )
+	logger.debug( "Persistance size: %i" % ( len( persistance ) ) )
 	filterAttributes = [ "title", "feedUrl" ]
 
 	# list of files in the feeds
@@ -568,7 +567,11 @@ if __name__=="__main__":
 							logger.debug( "\t..... is still in the feeds" )
 				else:
 					logger.debug( "\t..... is too young to process." )
-	extraFiles.sort()
+		#for p in persistance:
+		#	if p not in cachedFilesInFeeds:
+		#		logger.debug( "File not in feeds: %s" % ( p, ) )
+		#		persistance.remove( p )
+	#extraFiles.sort()
 	#logger.debug( "Extra file list:\n%s" % ( "\n\t".join( extraFiles ), ) )
 	logger.info( "File stats: %4i Extra, %4i Zeroed, %4i Removed" %
 			( len( extraFiles ), zeroFileCount, removedFileCount ) )
