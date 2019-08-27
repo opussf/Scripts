@@ -10,7 +10,7 @@ fileToCheck=$1
 fileToCheckTmpName="/tmp/checkfile_"`md5 -q -s "$fileToCheck"`
 
 # make sure checking file exists,
-if [ ! -f "$fileToCheck" ]; then
+if [ ! "$fileToCheck" ]; then
 	echo "$fileToCheck does not exist?"
 	exit 2  # this would keep it from runing anything if you are looking for success to continue
 fi
