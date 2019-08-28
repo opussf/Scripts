@@ -19,7 +19,7 @@ class Persistance( list ):
 	ask if a string has been seen
 	"""
 	persistanceFileName = "persistance.json"
-	def __init__( self, dir=".", pretty=False ):
+	def __init__( self, dir=".", expireage=None, pretty=False ):
 		""" init the object """
 		self.logger = logging.getLogger( "pullRSS" )
 		self.persistanceFile = os.path.join( dir, self.persistanceFileName )
@@ -29,13 +29,18 @@ class Persistance( list ):
 		except:
 			self.storedData = {}
 		for k in self.storedData.keys():
-			super( Persistance, self ).append( k.encode( 'ascii', 'ignore' ) )
+			if expireage is None or ( self.storedData[k]['ts'] + expireage >= time.time() ):
+				super( Persistance, self ).append( k.encode( 'ascii', 'ignore' ) )
+			else: # do not append, and remove from the tracking dictionary
+				self.logger.debug( "Expiring %s" % k )
+				del self.storedData[k]
 	def __del__( self ):
 		self.save()
 	def save( self ):
-		for item in super( Persistance, self ).__iter__():
-			if not self.storedData.get( item ):
-				self.storedData[item] = { "ts": time.time(), "time": time.strftime( "%a, %d %b %Y %H:%M:%S +0000", time.gmtime() ) }
+		"""
+		for item in super( Persistance, self ).__iter__(): # renew items in our list
+			self.storedData[item] = { "ts": time.time(), "time": time.strftime( "%a, %d %b %Y %H:%M:%S +0000", time.localtime() ) }
+		"""
 		try:
 			json.dump( self.storedData, open( self.persistanceFile, "w"), sort_keys=True, indent=self.pretty )  #None for no prety
 		except Exception as e:
@@ -44,6 +49,10 @@ class Persistance( list ):
 			else:
 				print( "%s may be critical...." % ( e, ) )
 			raise e
+	def append( self, item ):
+		self.logger.debug( "PERSISTANCE:: Append: %s " % item )
+		super( Persistance, self ).append( item )
+		self.storedData[item] = { "ts": time.time(), "time": time.strftime( "%a, %d %b %Y %H:%M:%S +0000", time.localtime() ) }
 class XML( object ):
 	""" XML object HAS an xml.sax.handler
 	An XML is a file object.  This could be a file, a string, or a URL.  <--- will depend on how the xml.sax.parser handles it.
@@ -424,8 +433,8 @@ if __name__=="__main__":
 	open( os.path.join( destPath, "STARTED" ), "w" ).close()
 	open( os.path.join( destPath, "DONE.txt" ), "w" ).close()
 
-	persistance = Persistance( cachePath, pretty=options.verbose )
-	logger.debug( "Persistance size: %i" % ( len( persistance ) ) )
+	persistance = Persistance( cachePath, expireage=options.zeroDays*86400, pretty=options.verbose )
+	logger.info( "Persistance size: %i" % ( len( persistance ) ) )
 	filterAttributes = [ "title", "feedUrl" ]
 
 	# list of files in the feeds
@@ -481,7 +490,7 @@ if __name__=="__main__":
 						logger.debug("    From: %s" % ( outFileName[1], ) )
 						if not dryrun:
 							try:
-								persistance.append( outFileName[0] )  # track that it was tried
+								persistance.append( outFileName[0] )  # track that it was seen
 								request = urllib2.Request( outFileName[1] )
 								result = urllib2.urlopen( request )
 								#print( result.info() )
@@ -504,6 +513,7 @@ if __name__=="__main__":
 						break
 				else:
 					logger.debug( "XX Tracked (do not download): %s" % (outFileName[0],) )
+					persistance.append( outFileName[0] )  # track that it was seen
 					break
 
 			logger.debug( "%2i errors for %s possible srcs" % ( len(errors), len( possibleSrcFiles ) ) )
