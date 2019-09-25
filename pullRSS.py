@@ -32,7 +32,6 @@ class Persistance( list ):
 			if expireage is None or ( self.storedData[k]['ts'] + expireage >= time.time() ):
 				super( Persistance, self ).append( k.encode( 'ascii', 'ignore' ) )
 			else: # do not append, and remove from the tracking dictionary
-				self.logger.debug( "Expiring %s" % k )
 				del self.storedData[k]
 	def __del__( self ):
 		self.save()
@@ -50,7 +49,6 @@ class Persistance( list ):
 				print( "%s may be critical...." % ( e, ) )
 			raise e
 	def append( self, item ):
-		self.logger.debug( "PERSISTANCE:: Append: %s " % item )
 		super( Persistance, self ).append( item )
 		self.storedData[item] = { "ts": time.time(), "time": time.strftime( "%a, %d %b %Y %H:%M:%S +0000", time.localtime() ) }
 class XML( object ):
@@ -108,6 +106,12 @@ class XML( object ):
 		else:
 			# throw an exception of some sort here....
 			self.logger.error( "I have no sources to parse." )
+	def setFormat( self, formatStr ):
+		""" set the format string for the object.
+		This should be a python % style string with %{field}s
+		"""
+		raise NotImplementedError
+
 class OPML( XML ):
 	""" OPML object to parse Outline data from OPML
 	OPML is very freeform on the <outline> tag.  Only the <opml><head><body><outline> tags are required.
