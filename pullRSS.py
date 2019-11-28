@@ -306,7 +306,8 @@ class SchlockMercenary( Feed ):
 		self.getSource()
 		outSrcs = []
 		for item in self.root.iter( "item" ):
-			if re.search( "Schlock", item.find( "title" ).text ):
+			titleText = item.find( "title" ).text
+			if titleText and re.search( "Schlock", titleText ):
 				for m in self.srcPattern.finditer( item.find( "description" ).text ):
 					for srcRaw in m.groups():
 						outName = srcRaw.split( "/" )[-1]
@@ -590,7 +591,7 @@ if __name__=="__main__":
 	logger.info( "File stats: %4i Extra, %4i Zeroed, %4i Removed" %
 			( len( extraFiles ), zeroFileCount, removedFileCount ) )
 	logger.info( "Complete: %5i in feeds, %5i downloaded (%s)." % ( totalFeedCount, totalDownloadCount, bytesToUnitString( totalDownloadBytes ) ) )
-
+	os.rename( os.path.join( destPath, "DONE.txt" ), os.path.join( destPath, "DONEDONE.txt" ) )
 	"""
 	# unicode (because from RSS) list of local cached files
 	logger.info( "File count in feeds: %i" % ( len( cachedFilesInFeeds ) ) )
