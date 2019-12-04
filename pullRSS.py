@@ -3,7 +3,7 @@
 import xml.etree.ElementTree as ET
 # https://docs.python.org/2/library/xml.etree.elementtree.html
 import re
-import urllib2, os
+import urllib2, ssl, os
 import shutil
 import logging, sys
 from optparse import OptionParser
@@ -96,7 +96,8 @@ class XML( object ):
 			if "url" in self.source:
 				try:
 					request = urllib2.Request( self.source["url"] )
-					result = urllib2.urlopen( request )
+					context = ssl._create_unverified_context()
+					result = urllib2.urlopen( request, context=context )
 					self.root = ET.fromstring( result.read() )
 				except (urllib2.URLError, ET.ParseError) as e:
 					self.logger.error( "%s: %s trying to read from %s" % ( e.__class__.__name__, e, self.source["url"] ) )
