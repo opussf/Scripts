@@ -79,6 +79,25 @@ class XML( object ):
 		""" sets a string as the source """
 		self.__clearsource()
 		self.source["string"] = str
+	def getURLresult( self, url ):
+		""" return a urllib2.result object for the given url """
+#		if self.username and self.password:
+#		self.logger.info( "username: %s" % ( self.username, ) )
+#		self.logger.info( "password: %s" % ( self.password, ) )
+#		passman = urllib2.HTTPPasswordMgrWithDefaultRealm()
+#		passman.add_password( None, self.source["url"] , self.username, self.password )
+#		urllib2.install_opener( urllib2.build_opener( urllib2.HTTPBasicAuthHandler( passman ) ) )
+
+		request = urllib2.Request( url )
+		if self.username and self.password:
+			self.logger.debug( "username: %s" % ( self.username, ) )
+			self.logger.debug( "password: %s" % ( self.password, ) )
+			base64string = base64.b64encode( '%s:%s' % ( self.username, self.password ) )
+			request.add_header( "Authorization", "Basic %s" % base64string )
+		context = ssl._create_unverified_context()
+		result = urllib2.urlopen( request, context=context )
+		return result
+
 	def parse( self ):
 		if len( self.source ) == 1:  # only
 			self.tree = None
@@ -94,23 +113,11 @@ class XML( object ):
 				except (IOError, ET.ParseError) as e:
 					self.logger.error( "%s trying to parse file %s" % ( e, self.source["file"] ) )
 			if "url" in self.source:
-#				if self.username and self.password:
-#					self.logger.info( "username: %s" % ( self.username, ) )
-#					self.logger.info( "password: %s" % ( self.password, ) )
-#					passman = urllib2.HTTPPasswordMgrWithDefaultRealm()
-#					passman.add_password( None, self.source["url"] , self.username, self.password )
-#					urllib2.install_opener( urllib2.build_opener( urllib2.HTTPBasicAuthHandler( passman ) ) )
 				try:
-					request = urllib2.Request( self.source["url"] )
-					if self.username and self.password:
-						self.logger.info( "username: %s" % ( self.username, ) )
-						self.logger.info( "password: %s" % ( self.password, ) )
-						base64string = base64.b64encode( '%s:%s' % ( self.username, self.password ) )
-						request.add_header( "Authorization", "Basic %s" % base64string )
-					context = ssl._create_unverified_context()
-					result = urllib2.urlopen( request, context=context )
+					result = self.getURLresult( self.source["url"] )
+					logger.debug( "Result.info: %s" % ( result.info(), ) )
 					self.root = ET.fromstring( result.read() )
-				except (urllib2.URLError, ET.ParseError) as e:
+				except ( urllib2.URLError, ET.ParseError) as e:
 					self.logger.error( "%s: %s trying to read from %s" % ( e.__class__.__name__, e, self.source["url"] ) )
 				finally:
 					request = None
@@ -514,9 +521,8 @@ if __name__=="__main__":
 						if not dryrun:
 							try:
 								persistance.append( outFileName[0] )  # track that it was seen
-								request = urllib2.Request( outFileName[1] )
-								result = urllib2.urlopen( request )
-								#print( result.info() )
+								result = feed.getURLresult( outFileName[1] )
+								#logger.info( "Result.info: %s" % ( result.info(), ) )
 								open( cacheFile, 'wb' ).write( result.read() )
 								shutil.copy( cacheFile, destFile )
 								downloadCount = downloadCount + 1
