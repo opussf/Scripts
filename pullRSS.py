@@ -3,9 +3,9 @@
 import xml.etree.ElementTree as ET
 # https://docs.python.org/2/library/xml.etree.elementtree.html
 import re
-import urllib2, ssl, os
+import urllib2, ssl, base64
 import shutil
-import logging, sys
+import logging, sys, os
 from optparse import OptionParser
 import time
 import json
@@ -94,8 +94,19 @@ class XML( object ):
 				except (IOError, ET.ParseError) as e:
 					self.logger.error( "%s trying to parse file %s" % ( e, self.source["file"] ) )
 			if "url" in self.source:
+#				if self.username and self.password:
+#					self.logger.info( "username: %s" % ( self.username, ) )
+#					self.logger.info( "password: %s" % ( self.password, ) )
+#					passman = urllib2.HTTPPasswordMgrWithDefaultRealm()
+#					passman.add_password( None, self.source["url"] , self.username, self.password )
+#					urllib2.install_opener( urllib2.build_opener( urllib2.HTTPBasicAuthHandler( passman ) ) )
 				try:
 					request = urllib2.Request( self.source["url"] )
+					if self.username and self.password:
+						self.logger.info( "username: %s" % ( self.username, ) )
+						self.logger.info( "password: %s" % ( self.password, ) )
+						base64string = base64.b64encode( '%s:%s' % ( self.username, self.password ) )
+						request.add_header( "Authorization", "Basic %s" % base64string )
 					context = ssl._create_unverified_context()
 					result = urllib2.urlopen( request, context=context )
 					self.root = ET.fromstring( result.read() )
@@ -131,12 +142,18 @@ class OPML( XML ):
 class Feed( XML ):
 	""" This is a factory class """
 	attributes = {}
-	def __init__( self, title, feedUrl ):
+	def __init__( self, attributes ):
 		""" This takes an attributes dictionary """
 		super( Feed, self ).__init__()
-		self.logger.debug( "Feed.__init__( %s, %s ) " % ( title, feedUrl ) )
-		self.title = title
-		self.feedUrl = feedUrl
+		self.title = attributes["title"] or attributes["xmlUrl"]
+		self.feedUrl = attributes["xmlUrl"]
+		try:
+			self.username = attributes["username"]
+			self.password = attributes["password"]
+		except:
+			self.username = None
+			self.password = None
+		self.logger.debug( "Feed.__init__( %s, %s ) " % ( self.title, self.feedUrl ) )
 		self.setURL( self.feedUrl )
 	def getSource( self ):
 		self.parse()
@@ -191,7 +208,7 @@ class Feed( XML ):
 
 		if matchedType:
 			logger.debug( "Matched to %s" % ( matchedType.__name__ ) )
-			return matchedType( title or attributes["xmlUrl"], attributes["xmlUrl"] )
+			return( matchedType( attributes ) )
 		else:
 			logger.error( "Unable to match to a known type." )
 class METARS( Feed ):
