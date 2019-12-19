@@ -59,6 +59,8 @@ class XML( object ):
 		""" init the object """
 		self.tree = None
 		self.root = None
+		self.username = None
+		self.password = None
 		self.source = { "file": None, "url": None, "string": None }
 		self.logger = logging.getLogger( "pullRSS" )
 	def __clearsource( self ):
@@ -115,7 +117,7 @@ class XML( object ):
 			if "url" in self.source:
 				try:
 					result = self.getURLresult( self.source["url"] )
-					logger.debug( "Result.info: %s" % ( result.info(), ) )
+					self.logger.debug( "Result.info: %s" % ( result.info(), ) )
 					self.root = ET.fromstring( result.read() )
 				except ( urllib2.URLError, ET.ParseError) as e:
 					self.logger.error( "%s: %s trying to read from %s" % ( e.__class__.__name__, e, self.source["url"] ) )
@@ -152,8 +154,10 @@ class Feed( XML ):
 	def __init__( self, attributes ):
 		""" This takes an attributes dictionary """
 		super( Feed, self ).__init__()
-		self.title = attributes["title"] or attributes["xmlUrl"]
+		self.title = attributes["xmlUrl"]
 		self.feedUrl = attributes["xmlUrl"]
+		if "title" in attributes.keys():
+			self.title = attributes["title"]
 		try:
 			self.username = attributes["username"]
 			self.password = attributes["password"]

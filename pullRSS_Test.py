@@ -157,7 +157,8 @@ class TestPURL( unittest.TestCase ):
 		self.assertTrue( isinstance( imageList, list ) )
 class TestHF( unittest.TestCase ):
 	def setUp( self ):
-		self.HF = HentaiFoundry( "HF RecentPictures", "https://www.hentai-foundry.com/feed/RecentPictures" )
+		attributes={"title": "HF RecentPictures", "xmlUrl": "https://www.hentai-foundry.com/feed/RecentPictures" }
+		self.HF = HentaiFoundry( attributes )
 	def tearDown( self ):
 		self.HF = None
 	def test_GetImageList_isList( self ):
