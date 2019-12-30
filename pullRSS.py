@@ -398,7 +398,7 @@ if __name__=="__main__":
 			help="Verbose output (Debug on)." )
 	parser.add_option( "-q", "--quiet", action="store_true", dest="quiet", default=False,
 			help="Quiets the logger." )
-	parser.add_option( "-z", "--zero", action="store", type="int", dest="zeroDays", default=3,
+	parser.add_option( "-z", "--zero", action="store", type="int", dest="zeroDays", default=30,
 			help="zero locally cached files after this number of days. [default: %default]" )
 	parser.add_option( "-o", "--opml", action="store", type="string", dest="opmlFile", default="~/Downloads/MySubscriptions.opml",
 			help="Set which opml file to parse.\n[default: %default]" )
@@ -468,7 +468,7 @@ if __name__=="__main__":
 	open( os.path.join( destPath, "DONE.txt" ), "w" ).close()
 
 	persistance = Persistance( cachePath, expireage=options.zeroDays*86400, pretty=options.verbose )
-	logger.info( "Persistance size: %i" % ( len( persistance ) ) )
+	logger.info( "Persistance size: %i items." % ( len( persistance ) ) )
 	filterAttributes = [ "title", "feedUrl" ]
 
 	# list of files in the feeds
