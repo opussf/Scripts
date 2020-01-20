@@ -398,7 +398,7 @@ if __name__=="__main__":
 			help="Verbose output (Debug on)." )
 	parser.add_option( "-q", "--quiet", action="store_true", dest="quiet", default=False,
 			help="Quiets the logger." )
-	parser.add_option( "-z", "--zero", action="store", type="int", dest="zeroDays", default=30,
+	parser.add_option( "-z", "--zero", action="store", type="int", dest="zeroDays", default=14,
 			help="zero locally cached files after this number of days. [default: %default]" )
 	parser.add_option( "-o", "--opml", action="store", type="string", dest="opmlFile", default="~/Downloads/MySubscriptions.opml",
 			help="Set which opml file to parse.\n[default: %default]" )
