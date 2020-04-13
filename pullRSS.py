@@ -388,6 +388,10 @@ def sanitizeFileName( filenameIn ):
 	badChars = "'"
 	#filenameNew = re.sub( badChars, filenameIn, "_" )
 	filenameNew = "".join( [ "_" if c in badChars else c for c in filenameIn ] )
+	# remove any extra
+	loc = filenameNew.find( "?" )
+	if loc >= 0:
+		filenameNew = filenameNew[:loc]
 	return filenameNew
 
 if __name__=="__main__":
