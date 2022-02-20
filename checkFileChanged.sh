@@ -18,6 +18,7 @@ fi
 if [ ! -f "$fileToCheckTmpName" ] || [ "$fileToCheck" -nt "$fileToCheckTmpName" ]; then
 	# tmp file does not exist, OR file to check is newer
 	touch "$fileToCheckTmpName"
+	echo ${fileToCheck} > "$fileToCheckTmpName"
 	exit 0
 fi
 exit 1

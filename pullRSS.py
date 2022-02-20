@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 import re
 import urllib2, ssl, base64
 import shutil
-import logging, sys, os
+import logging, sys, os, signal
 from optparse import OptionParser
 import time
 import json
@@ -13,6 +13,22 @@ import math
 #import threading
 #import Queue
 
+class Pid( object ):
+	def __init__( self ):
+		# get my pid
+		self.myPID = os.getpid()
+		# look for all python pids
+		try:
+			for line in os.popen("ps ax | grep -i python | grep %s | grep -v grep" % (os.path.basename(__file__),)):
+				fields = line.split()
+				pid = int(fields[0])
+				if pid != self.myPID:
+					os.kill(int(pid), signal.SIGKILL)
+					print("Killed process:",line)
+					time.sleep(10)
+		except Exception as e:
+			print(e)
+			sys.exit(1)
 class Persistance( list ):
 	""" create a persistance object
 	give this a string to track
@@ -395,6 +411,7 @@ def sanitizeFileName( filenameIn ):
 	return filenameNew
 
 if __name__=="__main__":
+	pid = Pid()
 	parser = OptionParser()
 	parser.add_option( "-d", "--dryrun", action="store_false", dest="dryrun", default=True,
 			help="Disable the default dryrun. Actually perform actions." )
@@ -458,7 +475,6 @@ if __name__=="__main__":
 		logger.warning( "DRYRUN engaged (use -d to disable dry run)" )
 	logger.debug( "OPMLFile: %s" % ( opmlFile, ) )
 	logger.debug( "DestPath: %s" % ( destPath, ) )
-
 
 	# make the cache dir if it does not exist
 	try:
