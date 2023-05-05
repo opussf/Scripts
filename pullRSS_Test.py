@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """ testPullRSS.py
 """
 
@@ -250,3 +250,5 @@ suite.addTests( unittest.makeSuite( TestHF ) )
 suite.addTests( unittest.makeSuite( TestMisc ) )
 suite.addTests( unittest.makeSuite( TestAdd ) )
 suite.addTests( unittest.makeSuite( TestPersistance ) )
+
+suite.runTests()

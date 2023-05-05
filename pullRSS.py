@@ -23,7 +23,7 @@ class Pid( object ):
 				fields = line.split()
 				pid = int(fields[0])
 				if pid != self.myPID:
-					os.kill(int(pid), signal.SIGKILL)
+					os.kill(int(pid), signal.SIGINT)
 					print("Killed process:",line)
 					time.sleep(10)
 		except Exception as e:

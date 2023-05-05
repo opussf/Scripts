@@ -11,7 +11,7 @@ if [ ${#PICTURE_FILES} -gt 0 ]; then
 	WORDS=`echo ${PICTURE_FILES} | wc -w`
 	if [ ${DEPLOY} == 1 ]; then
 		say "Deploying $WORDS screenshots" &
-		rsync -tzhvicP --rsh='ssh -p2022' "${PICTURE_SRC}"/* opus@$SERVER:/home/opus/public_html/wowshots/imgs
+		rsync -tzhvicP --rsh='ssh -oPubkeyAcceptedAlgorithms=+ssh-rsa -oHostKeyAlgorithms=+ssh-dss -p2022' "${PICTURE_SRC}"/* opus@$SERVER:/home/opus/public_html/wowshots/imgs
 		say "Deploy Complete."
 	fi
 	for file in ${PICTURE_FILES}; do
