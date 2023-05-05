@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 ##
 # clean_folder  --  clean up temporary folders
 ##
@@ -16,7 +16,7 @@ if (len(sys.argv) == 2) and (sys.argv[1] == '-d'):
 	dryrun = False
 else:
 	dryrun = True
-	print "Starting dryrun:"
+	print("Starting dryrun:")
 
 tmpdir = '/Users/opus/Downloads/Processed'
 daysback = 8
@@ -29,22 +29,22 @@ for d in os.walk(tmpdir, topdown=False):
 		if (os.lstat(thisfile).st_mtime < cutofftime):
 			try:
 				if dryrun:
-					print "I would delete:", thisfile
+					print("I would delete:", thisfile)
 				else:
 					os.remove(thisfile)
-			except OSError, (errno, strerror):
-				print "%s: OSError(%s): %s" % (d, errno, strerror)
+			except OSError as err:
+				print("%s: OSError(%s): %s" % (d, 5, err))
 
 	for d in dirnames:
 		thisdir = os.path.join(dirpath, d)
 		if not os.listdir(thisdir):
 			try:
 				if dryrun:
-					print "I would delete:", thisdir
+					print("I would delete:", thisdir)
 				else:
 					os.rmdir(thisdir)
-			except OSError, (errno, strerror):
+			except OSError as err:
 				if (errno != 66):
-					print "%s: OSError(%s): %s" % (d, errno, strerror)
+					print("%s: OSError(%s): %s" % (d, 6, err))
 if dryrun:
-	print "Ending Dryrun"
+	print("Ending Dryrun")
