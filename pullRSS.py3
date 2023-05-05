@@ -31,45 +31,65 @@ class Pid( object ):
 		except Exception as e:
 			print(e)
 			sys.exit(1)
-class Persistance_old( list ):
+class Persistance( list ):
 	""" create a persistance object
 	give this a string to track
 	ask if a string has been seen
 	"""
-	persistanceFileName = "persistance.json"
+	persistanceFileName = "persistance.db"
 	def __init__( self, dir=".", expireage=None, pretty=False ):
 		""" init the object """
 		self.logger = logging.getLogger( "pullRSS" )
 		self.persistanceFile = os.path.join( dir, self.persistanceFileName )
 		self.pretty = pretty and 4 or None
+		#try:
+			#self.storedData = json.load( open( self.persistanceFile, "r" ), parse_int=int )
+		# except:
+		# 	self.storedData = {}
+		self.connection = sqlite3.connect( self.persistanceFile )
+
+		self.cursor = self.connection.cursor()
+		# Create tables
 		try:
-			self.storedData = json.load( open( self.persistanceFile, "r" ), parse_int=int )
+			self.cursor.execute("CREATE TABLE files(name, lastSeen)")
 		except:
-			self.storedData = {}
-		for k in list(self.storedData.keys()):
-			if expireage is None or ( self.storedData[k]['ts'] + expireage >= time.time() ):
-				super( Persistance, self ).append( k.encode( 'ascii', 'ignore' ) )
-			else: # do not append, and remove from the tracking dictionary
-				del self.storedData[k]
+			pass
+		now = time.time()
+		for row in self.cursor.execute("SELECT name, lastSeen from files"):
+			if expireage is None or ( int(row[1]) + expireage >= now ):
+				super( Persistance, self ).append( row[0].encode( 'ascii', 'ignore' ) )
+			else:
+				self.cursor.execute("DELETE from files where name=?", row[0])
+
+		# for k in list(self.storedData.keys()):
+		# 	if expireage is None or ( self.storedData[k]['ts'] + expireage >= time.time() ):
+		# 		super( Persistance, self ).append( k.encode( 'ascii', 'ignore' ) )
+		# 	else: # do not append, and remove from the tracking dictionary
+		# 		del self.storedData[k]
 	def __del__( self ):
-		print("Persistance.__del__")
+		self.connection.close()
 	# 	self.save()
 	def save( self ):
 		"""
 		for item in super( Persistance, self ).__iter__(): # renew items in our list
 			self.storedData[item] = { "ts": time.time(), "time": time.strftime( "%a, %d %b %Y %H:%M:%S +0000", time.localtime() ) }
 		"""
-		try:
-			json.dump( self.storedData, open( self.persistanceFile, "w"), sort_keys=True, indent=self.pretty )  #None for no prety
-		except Exception as e:
-			if self.logger is not None:
-				self.logger.critical( "%s may be critical...." % ( e, ) )
-			else:
-				print( "%s may be critical...." % ( e, ) )
-			raise e
+		self.connection.close()
+		self.connection = sqlite3.connect( self.persistanceFile )
+		self.cursor = self.connection.cursor()
+		# try:
+		# 	json.dump( self.storedData, open( self.persistanceFile, "w"), sort_keys=True, indent=self.pretty )  #None for no prety
+		# except Exception as e:
+		# 	if self.logger is not None:
+		# 		self.logger.critical( "%s may be critical...." % ( e, ) )
+		# 	else:
+		# 		print( "%s may be critical...." % ( e, ) )
+		# 	raise e
 	def append( self, item ):
 		super( Persistance, self ).append( item )
-		self.storedData[item] = { "ts": time.time(), "time": time.strftime( "%a, %d %b %Y %H:%M:%S +0000", time.localtime() ) }
+		self.cursor.execute("INSERT INTO files VALUES('%s', '%i')" % (item, time.time()))
+		self.connection.commit()
+		# self.storedData[item] = { "ts": time.time(), "time": time.strftime( "%a, %d %b %Y %H:%M:%S +0000", time.localtime() ) }
 class XML( object ):
 	""" XML object HAS an xml.sax.handler
 	An XML is a file object.  This could be a file, a string, or a URL.  <--- will depend on how the xml.sax.parser handles it.
@@ -572,9 +592,9 @@ if __name__=="__main__":
 					persistance.append( outFileName[0] )  # track that it was seen
 					break
 
-			logger.debug( "%2i errors for %s possible srcs" % ( len(errors), len( possibleSrcFiles ) ) )
-			if len( errors ) == len( possibleSrcFiles ):
-				logger.error( "%s sources returned %s errors." % (len( possibleSrcFiles ), len( errors ) ) )
+			logger.debug( "%2i errors for %s possible srcs" % ( len(errors), len( list( possibleSrcFiles ) ) ) )
+			if len( errors ) > 0 and len( errors ) == len( list( possibleSrcFiles ) ):
+				logger.error( "%s sources returned %s errors." % (len( list( possibleSrcFiles ) ), len( errors ) ) )
 
 		persistance.save()
 		totalFeedCount = totalFeedCount + feedCount
