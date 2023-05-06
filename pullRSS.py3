@@ -42,12 +42,8 @@ class Persistance( list ):
 		self.logger = logging.getLogger( "pullRSS" )
 		self.persistanceFile = os.path.join( dir, self.persistanceFileName )
 		self.pretty = pretty and 4 or None
-		#try:
-			#self.storedData = json.load( open( self.persistanceFile, "r" ), parse_int=int )
-		# except:
-		# 	self.storedData = {}
-		self.connection = sqlite3.connect( self.persistanceFile )
 
+		self.connection = sqlite3.connect( self.persistanceFile )
 		self.cursor = self.connection.cursor()
 		# Create tables
 		try:
@@ -61,11 +57,6 @@ class Persistance( list ):
 			else:
 				self.cursor.execute("DELETE from files where name=?", row[0])
 
-		# for k in list(self.storedData.keys()):
-		# 	if expireage is None or ( self.storedData[k]['ts'] + expireage >= time.time() ):
-		# 		super( Persistance, self ).append( k.encode( 'ascii', 'ignore' ) )
-		# 	else: # do not append, and remove from the tracking dictionary
-		# 		del self.storedData[k]
 	def __del__( self ):
 		self.connection.close()
 	# 	self.save()
