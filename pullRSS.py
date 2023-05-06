@@ -1,15 +1,17 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import xml.etree.ElementTree as ET
 # https://docs.python.org/2/library/xml.etree.elementtree.html
 import re
-import urllib2, ssl, base64
+import urllib.request, urllib, urllib.error
+import ssl, base64
 import shutil
 import logging, sys, os, signal
 from optparse import OptionParser
 import time
 import json
 import math
+import sqlite3
 #import threading
 #import Queue
 
@@ -34,39 +36,60 @@ class Persistance( list ):
 	give this a string to track
 	ask if a string has been seen
 	"""
-	persistanceFileName = "persistance.json"
+	persistanceFileName = "persistance.db"
 	def __init__( self, dir=".", expireage=None, pretty=False ):
 		""" init the object """
 		self.logger = logging.getLogger( "pullRSS" )
 		self.persistanceFile = os.path.join( dir, self.persistanceFileName )
 		self.pretty = pretty and 4 or None
+		#try:
+			#self.storedData = json.load( open( self.persistanceFile, "r" ), parse_int=int )
+		# except:
+		# 	self.storedData = {}
+		self.connection = sqlite3.connect( self.persistanceFile )
+
+		self.cursor = self.connection.cursor()
+		# Create tables
 		try:
-			self.storedData = json.load( open( self.persistanceFile, "r" ), parse_int=int )
+			self.cursor.execute("CREATE TABLE files(name, lastSeen)")
 		except:
-			self.storedData = {}
-		for k in self.storedData.keys():
-			if expireage is None or ( self.storedData[k]['ts'] + expireage >= time.time() ):
-				super( Persistance, self ).append( k.encode( 'ascii', 'ignore' ) )
-			else: # do not append, and remove from the tracking dictionary
-				del self.storedData[k]
+			pass
+		now = time.time()
+		for row in self.cursor.execute("SELECT name, lastSeen from files"):
+			if expireage is None or ( int(row[1]) + expireage >= now ):
+				super( Persistance, self ).append( row[0].encode( 'ascii', 'ignore' ) )
+			else:
+				self.cursor.execute("DELETE from files where name=?", row[0])
+
+		# for k in list(self.storedData.keys()):
+		# 	if expireage is None or ( self.storedData[k]['ts'] + expireage >= time.time() ):
+		# 		super( Persistance, self ).append( k.encode( 'ascii', 'ignore' ) )
+		# 	else: # do not append, and remove from the tracking dictionary
+		# 		del self.storedData[k]
 	def __del__( self ):
-		self.save()
+		self.connection.close()
+	# 	self.save()
 	def save( self ):
 		"""
 		for item in super( Persistance, self ).__iter__(): # renew items in our list
 			self.storedData[item] = { "ts": time.time(), "time": time.strftime( "%a, %d %b %Y %H:%M:%S +0000", time.localtime() ) }
 		"""
-		try:
-			json.dump( self.storedData, open( self.persistanceFile, "w"), sort_keys=True, indent=self.pretty )  #None for no prety
-		except Exception as e:
-			if self.logger is not None:
-				self.logger.critical( "%s may be critical...." % ( e, ) )
-			else:
-				print( "%s may be critical...." % ( e, ) )
-			raise e
+		self.connection.close()
+		self.connection = sqlite3.connect( self.persistanceFile )
+		self.cursor = self.connection.cursor()
+		# try:
+		# 	json.dump( self.storedData, open( self.persistanceFile, "w"), sort_keys=True, indent=self.pretty )  #None for no prety
+		# except Exception as e:
+		# 	if self.logger is not None:
+		# 		self.logger.critical( "%s may be critical...." % ( e, ) )
+		# 	else:
+		# 		print( "%s may be critical...." % ( e, ) )
+		# 	raise e
 	def append( self, item ):
 		super( Persistance, self ).append( item )
-		self.storedData[item] = { "ts": time.time(), "time": time.strftime( "%a, %d %b %Y %H:%M:%S +0000", time.localtime() ) }
+		self.cursor.execute("INSERT INTO files VALUES('%s', '%i')" % (item, time.time()))
+		self.connection.commit()
+		# self.storedData[item] = { "ts": time.time(), "time": time.strftime( "%a, %d %b %Y %H:%M:%S +0000", time.localtime() ) }
 class XML( object ):
 	""" XML object HAS an xml.sax.handler
 	An XML is a file object.  This could be a file, a string, or a URL.  <--- will depend on how the xml.sax.parser handles it.
@@ -81,7 +104,7 @@ class XML( object ):
 		self.logger = logging.getLogger( "pullRSS" )
 	def __clearsource( self ):
 		""" clears other sources """
-		for k in self.source.keys():
+		for k in list(self.source.keys()):
 			self.source.pop( k, None )
 		self.tree = None
 		self.root = None
@@ -106,14 +129,14 @@ class XML( object ):
 #		passman.add_password( None, self.source["url"] , self.username, self.password )
 #		urllib2.install_opener( urllib2.build_opener( urllib2.HTTPBasicAuthHandler( passman ) ) )
 
-		request = urllib2.Request( url )
+		request = urllib.request.Request( url )
 		if self.username and self.password:
 			self.logger.debug( "username: %s" % ( self.username, ) )
 			self.logger.debug( "password: %s" % ( self.password, ) )
-			base64string = base64.b64encode( '%s:%s' % ( self.username, self.password ) )
-			request.add_header( "Authorization", "Basic %s" % base64string )
+			base64string = base64.b64encode( ('%s:%s' % ( self.username, self.password ) ).encode('ascii') )
+			request.add_header( "Authorization", "Basic %s" % base64string.decode('ascii') )
 		context = ssl._create_unverified_context()
-		result = urllib2.urlopen( request, context=context )
+		result = urllib.request.urlopen( request, context=context )
 		return result
 
 	def parse( self ):
@@ -135,7 +158,7 @@ class XML( object ):
 					result = self.getURLresult( self.source["url"] )
 					self.logger.debug( "Result.info: %s" % ( result.info(), ) )
 					self.root = ET.fromstring( result.read() )
-				except ( urllib2.URLError, ET.ParseError) as e:
+				except ( urllib.error.URLError, ET.ParseError) as e:
 					self.logger.error( "%s: %s trying to read from %s" % ( e.__class__.__name__, e, self.source["url"] ) )
 				finally:
 					request = None
@@ -172,7 +195,7 @@ class Feed( XML ):
 		super( Feed, self ).__init__()
 		self.title = attributes["xmlUrl"]
 		self.feedUrl = attributes["xmlUrl"]
-		if "title" in attributes.keys():
+		if "title" in list(attributes.keys()):
 			self.title = attributes["title"]
 		try:
 			self.username = attributes["username"]
@@ -218,11 +241,11 @@ class Feed( XML ):
 
 		matchedType = None
 		while len( subTypes ) > 0:
-			for className, classTypeInfo in subTypes.iteritems():
+			for className, classTypeInfo in list(subTypes.items()):
 				logger.debug( "Trying to match with %s" % ( className ) )
 
 				found = True
-				for k,v in classTypeInfo[0].iteritems():
+				for k,v in list(classTypeInfo[0].items()):
 					found = found & bool( re.search( v, attributes[k], flags=re.IGNORECASE ) )
 					logger.debug( "%s: %s ?= %s (%s)" % ( k, attributes[k], v, found ) )
 				if found:
@@ -569,9 +592,9 @@ if __name__=="__main__":
 					persistance.append( outFileName[0] )  # track that it was seen
 					break
 
-			logger.debug( "%2i errors for %s possible srcs" % ( len(errors), len( possibleSrcFiles ) ) )
-			if len( errors ) == len( possibleSrcFiles ):
-				logger.error( "%s sources returned %s errors." % (len( possibleSrcFiles ), len( errors ) ) )
+			logger.debug( "%2i errors for %s possible srcs" % ( len(errors), len( list( possibleSrcFiles ) ) ) )
+			if len( errors ) > 0 and len( errors ) == len( list( possibleSrcFiles ) ):
+				logger.error( "%s sources returned %s errors." % (len( list( possibleSrcFiles ) ), len( errors ) ) )
 
 		persistance.save()
 		totalFeedCount = totalFeedCount + feedCount
