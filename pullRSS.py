@@ -59,13 +59,10 @@ class Persistance( list ):
 			if expireage is None or ( int(row[1]) + expireage >= now ):
 				super( Persistance, self ).append( row[0].encode( 'ascii', 'ignore' ) )
 			else:
-				self.cursor.execute("DELETE from files where name=?", row[0])
+				pass
+				#print(row[0])
+				#self.cursor.execute("DELETE from files where name=?", (row[0],))
 
-		# for k in list(self.storedData.keys()):
-		# 	if expireage is None or ( self.storedData[k]['ts'] + expireage >= time.time() ):
-		# 		super( Persistance, self ).append( k.encode( 'ascii', 'ignore' ) )
-		# 	else: # do not append, and remove from the tracking dictionary
-		# 		del self.storedData[k]
 	def __del__( self ):
 		self.connection.close()
 	# 	self.save()

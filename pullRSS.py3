@@ -55,6 +55,7 @@ class Persistance( list ):
 			if expireage is None or ( int(row[1]) + expireage >= now ):
 				super( Persistance, self ).append( row[0].encode( 'ascii', 'ignore' ) )
 			else:
+				print(row[0])
 				self.cursor.execute("DELETE from files where name=?", row[0])
 
 	def __del__( self ):
@@ -68,14 +69,6 @@ class Persistance( list ):
 		self.connection.close()
 		self.connection = sqlite3.connect( self.persistanceFile )
 		self.cursor = self.connection.cursor()
-		# try:
-		# 	json.dump( self.storedData, open( self.persistanceFile, "w"), sort_keys=True, indent=self.pretty )  #None for no prety
-		# except Exception as e:
-		# 	if self.logger is not None:
-		# 		self.logger.critical( "%s may be critical...." % ( e, ) )
-		# 	else:
-		# 		print( "%s may be critical...." % ( e, ) )
-		# 	raise e
 	def append( self, item ):
 		super( Persistance, self ).append( item )
 		self.cursor.execute("INSERT INTO files VALUES('%s', '%i')" % (item, time.time()))

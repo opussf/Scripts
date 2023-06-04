@@ -1,7 +1,7 @@
 #!/bin/sh
 SERVER="www.zz9-za.com"
 
-DEPLOY=0
+DEPLOY=1
 
 WARCRAFTFOLDER="/Applications/World of Warcraft/_retail_/"
 PICTURE_SRC="$WARCRAFTFOLDER/Screenshots"
