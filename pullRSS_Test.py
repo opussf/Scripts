@@ -36,7 +36,7 @@ class TestXML( unittest.TestCase ):
 		self.XML = None
 	def test_XMLFromString( self ):
 		self.XML.setString( xmlStr )
-		self.assertEquals( xmlStr, self.XML.source["string"] )
+		self.assertEqual( xmlStr, self.XML.source["string"] )
 		self.XML.parse()
 		self.assertIsNotNone( self.XML.root )
 		self.assertEquals( "opml", self.XML.root.tag )
@@ -57,17 +57,17 @@ class TestXML( unittest.TestCase ):
 	def test_XMLFromFile_noFile( self ):
 		self.XML.setFile( "notthere.txt" )
 		self.XML.parse()
-		self.assertEquals( "None", self.XML.root.tag )
+		self.assertEqual( "None", self.XML.root.tag )
 	def test_XMLFromFile_badContents( self ):
 		self.XML.setFile( ".gitignore" )
 		self.XML.parse()
-		self.assertEquals( "None", self.XML.root.tag )
+		self.assertEqual( "None", self.XML.root.tag )
 	def test_XMLFromURL_KSFO( self ):
 		self.XML.setURL( "https://w1.weather.gov/xml/current_obs/KSFO.xml" )
 		#https://w1.weather.gov/xml/current_obs/KSFO.rss
 		self.XML.parse()
 		self.assertIsNotNone( self.XML.root )
-		self.assertEquals( "current_observation", self.XML.root.tag )
+		self.assertEqual( "current_observation", self.XML.root.tag )
 		print( "\n%s %s Temp: %s Wind: %s Baramoter: %s\"\n%s" %
 			( self.XML.root.find("station_id").text,
 			self.XML.root.find("weather").text,
@@ -181,8 +181,8 @@ class TestAdd( unittest.TestCase ):
 class TestPersistance( unittest.TestCase ):
 	@classmethod
 	def delFile( self ):
-		if os.path.exists( "persistance.json" ):
-			os.remove( "persistance.json" )
+		if os.path.exists( "persistance.db" ):
+			os.remove( "persistance.db" )
 	@classmethod
 	def setUpClass( cls ):
 		pass
@@ -200,9 +200,10 @@ class TestPersistance( unittest.TestCase ):
 		self.delFile()
 		self.P = Persistance( )
 		self.P = None
-		self.assertTrue( os.path.exists( "persistance.json" ) )
+		self.assertTrue( os.path.exists( "persistance.db" ) )
 	def test_persistance_reloadsData( self ):
 		self.P.append( "Hello" )
+		print( self.P )
 		self.P = None
 		self.P = Persistance( "." )
 		self.assertTrue( "Hello" in self.P )
@@ -222,7 +223,7 @@ class TestPersistance( unittest.TestCase ):
 		self.P.append( "One" ) # sets item
 		self.P = None # writes file
 		time.sleep( 2 ) # age it
-		self.P = Persistance( ".", expireage=0 ) # restore, expire all
+		self.P = Persistance( ".", expire_age=0 ) # restore, expire all
 		self.P = None
 		self.P = Persistance()
 		self.assertEquals( 0, len( self.P ) )
@@ -235,7 +236,7 @@ class TestPersistance( unittest.TestCase ):
 		self.P.append( "Two" ) # "Two" should be renewed
 		self.P = None
 		time.sleep( 0.5 )
-		self.P = Persistance( ".", expireage=1 )  # if it is not renewed, this should be a 1.5 second age
+		self.P = Persistance( ".", expire_age=1 )  # if it is not renewed, this should be a 1.5 second age
 		self.assertEquals( 1, len( self.P ) )
 		self.assertEquals( "Two", self.P[0] )
 
@@ -251,4 +252,5 @@ suite.addTests( unittest.makeSuite( TestMisc ) )
 suite.addTests( unittest.makeSuite( TestAdd ) )
 suite.addTests( unittest.makeSuite( TestPersistance ) )
 
-suite.runTests()
+runner = unittest.TextTestRunner()
+runner.run(suite)

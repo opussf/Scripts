@@ -37,11 +37,10 @@ class Persistance( list ):
 	ask if a string has been seen
 	"""
 	persistanceFileName = "persistance.db"
-	def __init__( self, dir=".", expireage=None, pretty=False ):
+	def __init__( self, dir=".", expire_age=None ):
 		""" init the object """
 		self.logger = logging.getLogger( "pullRSS" )
 		self.persistanceFile = os.path.join( dir, self.persistanceFileName )
-		self.pretty = pretty and 4 or None
 		#try:
 			#self.storedData = json.load( open( self.persistanceFile, "r" ), parse_int=int )
 		# except:
@@ -51,13 +50,13 @@ class Persistance( list ):
 		self.cursor = self.connection.cursor()
 		# Create tables
 		try:
-			self.cursor.execute("CREATE TABLE files(name, lastSeen)")
+			self.cursor.execute("CREATE TABLE files(name type UNIQUE, lastSeen)")
 		except:
 			pass
 		now = time.time()
 		for row in self.cursor.execute("SELECT name, lastSeen from files"):
-			if expireage is None or ( int(row[1]) + expireage >= now ):
-				super( Persistance, self ).append( row[0].encode( 'ascii', 'ignore' ) )
+			if expire_age is None or ( int(row[1]) + expire_age >= now ):
+				super( Persistance, self ).append( row[0].encode( 'ascii', 'ignore' ).decode('UTF-8') )
 			else:
 				pass
 				#print(row[0])
@@ -84,7 +83,10 @@ class Persistance( list ):
 		# 	raise e
 	def append( self, item ):
 		super( Persistance, self ).append( item )
-		self.cursor.execute("INSERT INTO files VALUES('%s', '%i')" % (item, time.time()))
+		try:
+			self.cursor.execute("INSERT INTO files VALUES('%s', '%i')" % (item, time.time()))
+		except sqlite3.IntegrityError:
+			self.cursor.execute("UPDATE files SET lastSeen = '%i' WHERE name = '%s'"  % ( time.time(), item ) )
 		self.connection.commit()
 		# self.storedData[item] = { "ts": time.time(), "time": time.strftime( "%a, %d %b %Y %H:%M:%S +0000", time.localtime() ) }
 class XML( object ):
@@ -433,6 +435,8 @@ def sanitizeFileName( filenameIn ):
 if __name__=="__main__":
 	pid = Pid()
 	parser = OptionParser()
+	parser.add_option(       "--seed", action="store_true", dest="seed", default=False,
+			help="Seed database from feeds. Do not download.")
 	parser.add_option( "-d", "--dryrun", action="store_false", dest="dryrun", default=True,
 			help="Disable the default dryrun. Actually perform actions." )
 	parser.add_option( "-v", "--verbose", action="store_true", dest="verbose", default=False,
@@ -507,7 +511,7 @@ if __name__=="__main__":
 	open( os.path.join( destPath, "STARTED" ), "w" ).close()
 	open( os.path.join( destPath, "DONE.txt" ), "w" ).close()
 
-	persistance = Persistance( cachePath, expireage=options.zeroDays*86400, pretty=options.verbose )
+	persistance = Persistance( cachePath, expire_age=options.zeroDays*86400 )
 	logger.info( "Persistance size: %i items." % ( len( persistance ) ) )
 	filterAttributes = [ "title", "feedUrl" ]
 
@@ -558,6 +562,10 @@ if __name__=="__main__":
 				logger.debug( " destFile: %s" % ( destFile, ) )
 				if outFileName[0] not in persistance:   # if it is tracked, do nothing more.
 					logger.debug( "*) notTracked in persistance" )
+					if options.seed:
+						logger.info( "*) Seeding %s" % ( outFileName[0], ) )
+						persistance.append( outFileName[0] )
+						break
 					if not os.path.exists( cacheFile ):  # not in the cache dir
 						logger.debug( "*) do not have locally" )
 						logger.info( "Download: (%2i-%2i/%2i) %s" % ( downloadCount+1, srcCount, feedCount, outFileName[0] ) )
