@@ -52,15 +52,26 @@ class Persistance( list ):
 		try:
 			self.cursor.execute("CREATE TABLE files(name type UNIQUE, lastSeen)")
 		except:
-			pass
+			self.cursor.execute("VACUUM")
+			self.connection.commit()
 		now = time.time()
-		for row in self.cursor.execute("SELECT name, lastSeen from files"):
+		to_del = []
+		# if expire_age:
+		# 	self.cursor.execute("DELETE from files where lastSeen < '?'", (now - expire_age))
+		# 	self.connection.commit()
+		# 	self.save()
+		for row in self.cursor.execute("SELECT name, lastSeen from files order by lastSeen"):
 			if expire_age is None or ( int(row[1]) + expire_age >= now ):
 				super( Persistance, self ).append( row[0].encode( 'ascii', 'ignore' ).decode('UTF-8') )
 			else:
-				pass
-				#print(row[0])
-				#self.cursor.execute("DELETE from files where name=?", (row[0],))
+				self.logger.verbose( "%i ago, last saw %s." % ((now - int(row[1]))/86400.00, row[0] ))
+				to_del.append(row[0])
+		for item in to_del:
+			self.cursor.execute("DELETE from files where name = ?", (item,) )
+			self.connection.commit()
+
+		self.logger.info("Pruned %i entries." % (len(to_del),))
+		self.save()
 
 	def __del__( self ):
 		self.connection.close()
