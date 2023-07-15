@@ -275,6 +275,20 @@ class RSS( Feed ):
 				outName = srcInfo[1]
 				outSrcs.append( [ ( outName, src ) ] )
 		return outSrcs
+class ACAST( Feed ):
+	"""RSS object for acast"""
+	matchAttributes = { "type": "rss", "version": "acast" }
+	def getImageURLs( self ):
+		self.getSource()
+		outSrcs = []
+		for item in self.root.iter( "item" ):
+			outName, src = "", ""
+			for episodeurl in item.iter( "{https://schema.acast.com/1.0/}episodeUrl" ):
+				outName = "%s.mp3" % (episodeurl.text,)
+			for enclosure in item.iter( "enclosure" ):
+				src = enclosure.get("url")
+			outSrcs.append( [ ( outName, src ) ] )
+		return outSrcs
 class TumblrFeed( Feed ):
 	matchAttributes = { "xmlUrl": "tumblr.com" }
 	srcPattern = re.compile('.*src=["\'](.*?)["\'].*')
@@ -626,7 +640,7 @@ if __name__=="__main__":
 	extraFiles = []
 	if filterRE is None:
 		logger.debug( "Filter is not set, prune files....." )
-		for (dirpath, dirnames, filenames) in os.walk( cachePath ):
+		for (dirpath, dirname, filenames) in os.walk( cachePath ):
 			extraFiles = list( set( filenames ) - set( cachedFilesInFeeds ) )  # files that are cahced, but not in feeds.
 			logger.debug( "%s files in cache." % ( len( filenames ), ) )
 			for f in filenames:
