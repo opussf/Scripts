@@ -64,7 +64,7 @@ class Persistance( list ):
 			if expire_age is None or ( int(row[1]) + expire_age >= now ):
 				super( Persistance, self ).append( row[0].encode( 'ascii', 'ignore' ).decode('UTF-8') )
 			else:
-				self.logger.verbose( "%i ago, last saw %s." % ((now - int(row[1]))/86400.00, row[0] ))
+				self.logger.debug( "%i ago, last saw %s." % ((now - int(row[1]))/86400.00, row[0] ))
 				to_del.append(row[0])
 		for item in to_del:
 			self.cursor.execute("DELETE from files where name = ?", (item,) )
