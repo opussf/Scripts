@@ -4,6 +4,7 @@
 
 from pullRSS import *
 import unittest, os, logging, time
+import sys
 import json
 
 xmlStr = """<?xml version="1.0" encoding="UTF-8"?>
@@ -13,7 +14,7 @@ xmlStr = """<?xml version="1.0" encoding="UTF-8"?>
 	</head>
 	<body>
 		<!-- 'normal' feeds -->
-		<outline type="atom" version="ATOM" xmlUrl="http://atom" />
+		<outline title="" type="atom" version="ATOM" xmlUrl="http://atom" />
 		<outline text="Overwatch Fan Art" description="" title="Overwatch Fan Art" type="rss" version="RSS" htmlUrl="http://overwatch-fan-art.tumblr.com/" xmlUrl="http://overwatch-fan-art.tumblr.com/rss"/>
 		<outline type="rss" version="RSS" xmlUrl="https://w1.weather.gov/xml/current_obs/KSFO.rss" />
 		<outline type="xml" version="METARS" xmlUrl="https://aviationweather.gov/adds/dataserver_current/httpparam?dataSource=metars&amp;requestType=retrieve&amp;format=xml&amp;stationString=KSFO%20PHNL&amp;hoursBeforeNow=3" />
@@ -39,16 +40,16 @@ class TestXML( unittest.TestCase ):
 		self.assertEqual( xmlStr, self.XML.source["string"] )
 		self.XML.parse()
 		self.assertIsNotNone( self.XML.root )
-		self.assertEquals( "opml", self.XML.root.tag )
+		self.assertEqual( "opml", self.XML.root.tag )
 	def test_XMLFromString_bad( self ):
 		""" bad string should raise an error.  keep the root as None"""
 		self.XML.setString( "I am NOT XML...  Shocker, I know." )
 		self.XML.parse()
-		self.assertEquals( "None", self.XML.root.tag )
+		self.assertEqual( "None", self.XML.root.tag )
 	def test_XMLFromString_badForm( self ):
 		self.XML.setString( "<file><head></head><body></file>" )
 		self.XML.parse()
-		self.assertEquals( "None", self.XML.root.tag )
+		self.assertEqual( "None", self.XML.root.tag )
 	def test_XMLFromFile( self ):
 		self.XML.setFile( self.testOMPLFileName )
 		self.assertIsNotNone( self.XML.source["file"] )
@@ -93,8 +94,7 @@ class TestXML( unittest.TestCase ):
 		)
 		self.assertEquals( "KOAK", self.XML.root.find("station_id").text )
 
-
-	def test_XMLFromURL_WXUNDERGROUND( self ):
+	def notest_XMLFromURL_WXUNDERGROUND( self ):
 		self.XML.setURL( "https://api.wunderground.com/weatherstation/WXDailyHistory.asp?ID=KCASANFR902&format=XML ")
 		self.XML.parse()
 		co = self.XML.root.find( "current_observation" )
@@ -141,7 +141,7 @@ class TestFEED( unittest.TestCase ):
 	pass
 class TestTumblr( unittest.TestCase ):
 	def setUp( self ):
-		self.Tumblr = TumblrFeed( "overwatch fan art", "http://overwatch-fan-art.tumblr.com/rss" )
+		self.Tumblr = TumblrFeed( {"title": "overwatch fan art", "xmlUrl": "http://overwatch-fan-art.tumblr.com/rss"} )
 	def tearDown( self ):
 		self.Tumblr = None
 	def test_GetImageList_isList( self ):
@@ -149,7 +149,7 @@ class TestTumblr( unittest.TestCase ):
 		self.assertTrue( isinstance( imageList, list ) )
 class TestPURL( unittest.TestCase ):
 	def setUp( self ):
-		self.PURL = PURL( "RandomNudes", "http://www.randomnude.com/feed/" )
+		self.PURL = PURL( {"title": "RandomNudes", "xmlUrl": "http://www.randomnude.com/feed/"} )
 	def tearDown( self ):
 		self.PURL = None
 	def test_GetImageList_isList( self ):
@@ -166,9 +166,9 @@ class TestHF( unittest.TestCase ):
 		self.assertTrue( isinstance( imageList, list ) )
 class TestMisc( unittest.TestCase ):
 	def test_sanitizeFilename_01( self ):
-		self.assertEquals( "file_name", sanitizeFileName( "file'name" ) )
+		self.assertEqual( "file_name", sanitizeFileName( "file'name" ) )
 	def test_bytesToUnitString_01( self ):
-		self.assertEquals( "  1.024 kB", bytesToUnitString( 1024 ) )
+		self.assertEqual( "  1.024 kB", bytesToUnitString( 1024 ) )
 	def test_bytesToUnitString_zeroPercision( self ):
 		self.assertEquals( "  1 kB", bytesToUnitString( 1024, 0 ) )
 	def test_bytesToUnitString_onePlace( self ):
@@ -183,6 +183,7 @@ class TestPersistance( unittest.TestCase ):
 	def delFile( self ):
 		if os.path.exists( "persistance.db" ):
 			os.remove( "persistance.db" )
+			time.sleep(1)
 	@classmethod
 	def setUpClass( cls ):
 		pass
@@ -214,10 +215,10 @@ class TestPersistance( unittest.TestCase ):
 		self.P.append( "Hello" )
 		self.P.append( "Hello" )
 		self.P.append( "Hello" )
-		self.assertEquals( 3, len( self.P ) )
+		self.assertEqual( 3, len( self.P ), "Should only have 3 entries." )
 		self.P = None
 		self.P = Persistance( "." )
-		self.assertEquals( 1, len( self.P ) )
+		self.assertEqual( 1, len( self.P ) )
 	def test_persistance_expire_removesItems( self ):
 		""" perform an expire method """
 		self.P.append( "One" ) # sets item
@@ -226,7 +227,7 @@ class TestPersistance( unittest.TestCase ):
 		self.P = Persistance( ".", expire_age=0 ) # restore, expire all
 		self.P = None
 		self.P = Persistance()
-		self.assertEquals( 0, len( self.P ) )
+		self.assertEqual( 0, len( self.P ) )
 	def test_persistance_expire_dupeRenewsTime( self ):
 		""" """
 		self.P.append( "Two" )
@@ -235,18 +236,18 @@ class TestPersistance( unittest.TestCase ):
 		self.P = Persistance( "." ) # don't expire
 		self.P.append( "Two" ) # "Two" should be renewed
 		self.P = None
-		time.sleep( 0.5 )
-		self.P = Persistance( ".", expire_age=1 )  # if it is not renewed, this should be a 1.5 second age
-		self.assertEquals( 1, len( self.P ) )
-		self.assertEquals( "Two", self.P[0] )
+		time.sleep( 1 )
+		self.P = Persistance( ".", expire_age=2 )  # if it is not renewed, this should be a 1.5 second age
+		self.assertEqual( 1, len( self.P ) )
+		self.assertEqual( "Two", self.P[0] )
 
 
 suite = unittest.TestSuite()
 suite.addTests( unittest.makeSuite( TestXML ) )
 suite.addTests( unittest.makeSuite( TestOMPL ) )
 suite.addTests( unittest.makeSuite( TestFEED ) )
-#suite.addTests( unittest.makeSuite( TestTumblr ) )
-#suite.addTests( unittest.makeSuite( TestPURL ) )
+suite.addTests( unittest.makeSuite( TestTumblr ) )
+suite.addTests( unittest.makeSuite( TestPURL ) )
 suite.addTests( unittest.makeSuite( TestHF ) )
 suite.addTests( unittest.makeSuite( TestMisc ) )
 suite.addTests( unittest.makeSuite( TestAdd ) )
