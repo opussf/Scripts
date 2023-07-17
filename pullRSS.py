@@ -682,14 +682,8 @@ if __name__=="__main__":
 							logger.debug( "\t..... is still in the feeds" )
 				else:
 					logger.debug( "\t..... is too young to process." )
-		#for p in persistance:
-		#	if p not in cachedFilesInFeeds:
-		#		logger.debug( "File not in feeds: %s" % ( p, ) )
-		#		persistance.remove( p )
-
 	if filterRE is None:
 		persistance.prune()
-
 	#extraFiles.sort()
 	#logger.debug( "Extra file list:\n%s" % ( "\n\t".join( extraFiles ), ) )
 	logger.info( "File stats: %4i Extra, %4i Zeroed, %4i Removed" %
