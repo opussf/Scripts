@@ -39,6 +39,7 @@ class Persistance( list ):
 	persistanceFileName = "persistance.db"
 	def __init__( self, dir=".", expire_age=None ):
 		""" init the object """
+		self.expire_age = expire_age
 		self.logger = logging.getLogger( "pullRSS" )
 		self.persistanceFile = os.path.join( dir, self.persistanceFileName )
 		#try:
@@ -61,18 +62,7 @@ class Persistance( list ):
 		# 	self.connection.commit()
 		# 	self.save()
 		for row in self.cursor.execute("SELECT name, lastSeen from files order by lastSeen"):
-			if expire_age is None or ( int(row[1]) + expire_age >= now ):
-				super( Persistance, self ).append( row[0].encode( 'ascii', 'ignore' ).decode('UTF-8') )
-			else:
-				self.logger.debug( "%i ago, last saw %s." % ((now - int(row[1]))/86400.00, row[0] ))
-				to_del.append(row[0])
-		for item in to_del:
-			self.cursor.execute("DELETE from files where name = ?", (item,) )
-			self.connection.commit()
-
-		self.logger.info("Pruned %i entries." % (len(to_del),))
-		self.save()
-
+			super( Persistance, self ).append( row[0].encode( 'ascii', 'ignore' ).decode('UTF-8') )
 	def __del__( self ):
 		self.connection.close()
 	# 	self.save()
@@ -100,6 +90,15 @@ class Persistance( list ):
 			self.cursor.execute("UPDATE files SET lastSeen = '%i' WHERE name = '%s'"  % ( time.time(), item ) )
 		self.connection.commit()
 		# self.storedData[item] = { "ts": time.time(), "time": time.strftime( "%a, %d %b %Y %H:%M:%S +0000", time.localtime() ) }
+	def prune( self ):
+		self.save()
+		for row in self.cursor.execute("SELECT count(*) from files where lastSeen < ?", (time.time() - self.expire_age,)):
+			to_del_count = row[0]
+		self.cursor.execute("DELETE from files where lastSeen < ?", (time.time() - self.expire_age,))
+		self.connection.commit()
+		self.cursor.execute("VACUUM")
+		self.connection.commit()
+		self.logger.info("PRUNED %i entries from persistance" % (to_del_count,))
 class XML( object ):
 	""" XML object HAS an xml.sax.handler
 	An XML is a file object.  This could be a file, a string, or a URL.  <--- will depend on how the xml.sax.parser handles it.
@@ -687,6 +686,10 @@ if __name__=="__main__":
 		#	if p not in cachedFilesInFeeds:
 		#		logger.debug( "File not in feeds: %s" % ( p, ) )
 		#		persistance.remove( p )
+
+	if filterRE is None:
+		persistance.prune()
+
 	#extraFiles.sort()
 	#logger.debug( "Extra file list:\n%s" % ( "\n\t".join( extraFiles ), ) )
 	logger.info( "File stats: %4i Extra, %4i Zeroed, %4i Removed" %
