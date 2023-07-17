@@ -92,9 +92,9 @@ class Persistance( list ):
 		# self.storedData[item] = { "ts": time.time(), "time": time.strftime( "%a, %d %b %Y %H:%M:%S +0000", time.localtime() ) }
 	def prune( self ):
 		self.save()
-		for row in self.cursor.execute("SELECT count(*) from files where lastSeen < ?", (time.time() - self.expire_age,)):
+		for row in self.cursor.execute("SELECT count(*) from files where lastSeen < ?", (str(time.time() - self.expire_age),)):
 			to_del_count = row[0]
-		self.cursor.execute("DELETE from files where lastSeen < ?", (time.time() - self.expire_age,))
+		self.cursor.execute("DELETE from files where lastSeen < ?", (str(time.time() - self.expire_age),))
 		self.connection.commit()
 		self.cursor.execute("VACUUM")
 		self.connection.commit()

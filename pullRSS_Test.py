@@ -170,9 +170,9 @@ class TestMisc( unittest.TestCase ):
 	def test_bytesToUnitString_01( self ):
 		self.assertEqual( "  1.024 kB", bytesToUnitString( 1024 ) )
 	def test_bytesToUnitString_zeroPercision( self ):
-		self.assertEquals( "  1 kB", bytesToUnitString( 1024, 0 ) )
+		self.assertEqual( "  1 kB", bytesToUnitString( 1024, 0 ) )
 	def test_bytesToUnitString_onePlace( self ):
-		self.assertEquals( "  1.0 kB", bytesToUnitString( 1024, 1 ) )
+		self.assertEqual( "  1.0 kB", bytesToUnitString( 1024, 1 ) )
 class TestAdd( unittest.TestCase ):
 	def test_addRSS( self ):
 		pass
@@ -204,7 +204,6 @@ class TestPersistance( unittest.TestCase ):
 		self.assertTrue( os.path.exists( "persistance.db" ) )
 	def test_persistance_reloadsData( self ):
 		self.P.append( "Hello" )
-		print( self.P )
 		self.P = None
 		self.P = Persistance( "." )
 		self.assertTrue( "Hello" in self.P )
@@ -222,11 +221,14 @@ class TestPersistance( unittest.TestCase ):
 	def test_persistance_expire_removesItems( self ):
 		""" perform an expire method """
 		self.P.append( "One" ) # sets item
+		self.P.save()
 		self.P = None # writes file
 		time.sleep( 2 ) # age it
 		self.P = Persistance( ".", expire_age=0 ) # restore, expire all
+		self.P.prune()
+		self.P.save()
 		self.P = None
-		self.P = Persistance()
+		self.P = Persistance( "." )
 		self.assertEqual( 0, len( self.P ) )
 	def test_persistance_expire_dupeRenewsTime( self ):
 		""" """
