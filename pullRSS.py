@@ -131,13 +131,6 @@ class XML( object ):
 		self.source["string"] = str
 	def getURLresult( self, url ):
 		""" return a urllib2.result object for the given url """
-#		if self.username and self.password:
-#		self.logger.info( "username: %s" % ( self.username, ) )
-#		self.logger.info( "password: %s" % ( self.password, ) )
-#		passman = urllib2.HTTPPasswordMgrWithDefaultRealm()
-#		passman.add_password( None, self.source["url"] , self.username, self.password )
-#		urllib2.install_opener( urllib2.build_opener( urllib2.HTTPBasicAuthHandler( passman ) ) )
-
 		request = urllib.request.Request( url )
 		if self.username and self.password:
 			self.logger.debug( "username: %s" % ( self.username, ) )
